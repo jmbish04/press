@@ -116,4 +116,27 @@
       "secret_name": "OPENAI_API_KEY",
     },
   ],
+  "vectorize": [
+    {
+      "binding": "VECTORIZE",
+      "index_name": "press_news_embeddings",
+    },
+  ],
+  "browser": {
+    "binding": "BROWSER",
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NEWS_AGENT",
+        "class_name": "NewsAgent",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["NewsAgent"],
+    },
+  ],
 }

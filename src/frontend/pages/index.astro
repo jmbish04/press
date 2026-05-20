@@ -1,12 +1,21 @@
 ---
-import { ComponentExample } from "@/components/ComponentExample";
-import BaseLayout from "@/layouts/BaseLayout.astro";
-import { siteConfig } from "@/lib/config";
+import '../styles/global.css';
+import { Dashboard } from '../components/Dashboard.tsx';
 ---
 
-<BaseLayout
-  title={siteConfig.name}
-  description={siteConfig.description}
->
-  <ComponentExample client:load />
-</BaseLayout>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Monolith Archive</title>
+  </head>
+  <body class="min-h-screen bg-background text-foreground p-8 antialiased">
+    <main class="max-w-7xl mx-auto space-y-12">
+      <header>
+        <h1 class="text-4xl font-bold uppercase tracking-widest text-foreground">The Archive</h1>
+        <p class="text-muted-foreground mt-2 text-sm uppercase tracking-wider">Automated Ingestion & RAG Engine</p>
+      </header>
+      <Dashboard client:load />
+    </main>
+  </body>
+</html>
