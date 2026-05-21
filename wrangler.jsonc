@@ -16,7 +16,7 @@
       "invocation_logs": true,
     },
     "traces": {
-      "enabled": false,
+      "enabled": true,
       "persist": true,
       "head_sampling_rate": 1,
     },
@@ -34,8 +34,7 @@
     {
       "binding": "DB",
       "database_name": "press",
-      "database_id": "d126139f-6f57-49d2-bbc4-d20bbd46bbf4",
-      "preview_database_id": "d126139f-6f57-49d2-bbc4-d20bbd46bbf4",
+      "database_id": "250143d9-3d0b-482d-a5ea-127743826790",
       "migrations_dir": "drizzle",
     },
   ],
