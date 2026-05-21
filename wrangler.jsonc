@@ -38,6 +38,12 @@
       "migrations_dir": "drizzle",
     },
   ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSION",
+      "id": "a397be9fbe7b4040a09fc5d3a55dcbca",
+    }
+  ],
   "secrets_store_secrets": [
     {
       "binding": "GITHUB_TOKEN",
