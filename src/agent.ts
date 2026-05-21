@@ -4,7 +4,7 @@ import { AIChatAgent } from "agents";
 import { inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 
-import * as schema from "./backend/db/schemas/index";
+import * as schema from "./backend/db/schema";
 
 export interface Env {
   DB: D1Database;
@@ -34,7 +34,7 @@ export class NewsAgent extends AIChatAgent<Env> {
             {
               text: [query],
             },
-            { gateway: { id: this.env.AI_GATEWAY_ID } },
+            { gateway: { id: this.env.AI_GATEWAY_ID, account: this.env.CF_ACCOUNT_ID } },
           );
 
           const vectorRes = await this.env.VECTORIZE.query(queryEmbed.data[0], { topK: 3 });
