@@ -42,7 +42,7 @@
     {
       "binding": "SESSION",
       "id": "a397be9fbe7b4040a09fc5d3a55dcbca",
-    }
+    },
   ],
   "secrets_store_secrets": [
     {
@@ -124,7 +124,7 @@
   "vectorize": [
     {
       "binding": "VECTORIZE",
-      "index_name": "press_news_embeddings",
+      "index_name": "press",
     },
   ],
   "browser": {

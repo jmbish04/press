@@ -29,8 +29,8 @@ export const MODELS = {
   chat: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
   /** Structured metadata extraction. */
   extract: "@cf/meta/llama-3.1-8b-instruct",
-  /** Embeddings — must match the dimensions of the Vectorize index. */
-  embedding: "@cf/baai/bge-base-en-v1.5",
+  /** Embeddings — must match the model the `press` Vectorize index was created with. */
+  embedding: "@cf/baai/bge-large-en-v1.5",
   /** Long-form HTML/code generation for spawned artifacts. */
   generate: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
 } as const;

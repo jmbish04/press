@@ -14,7 +14,7 @@ import { logger } from "hono/logger";
 
 import { extractUrls } from "../ai/ingest/extractUrls";
 import { ingestUrls } from "../ai/ingest/ingestUrls";
-import { authMiddleware } from "./middleware/auth";
+import { apiKeyMiddleware } from "./middleware/apiKey";
 import { aiRouter } from "./routes/ai";
 import { artifactAssetsRouter, artifactsRouter } from "./routes/artifacts";
 import { authRouter } from "./routes/auth";
@@ -78,8 +78,8 @@ app.get("/swagger", swaggerUI({ url: "/openapi.json" }));
 app.get("/scalar", apiReference({ spec: { url: "/openapi.json" } }));
 
 // Ingestion API route. Browser Rendering + AI inference are expensive, so the
-// endpoint is authenticated to prevent unauthenticated resource abuse.
-app.use("/api/ingest", authMiddleware);
+// endpoint requires the Secrets Store API key to prevent resource abuse.
+app.use("/api/ingest", apiKeyMiddleware);
 
 const ingestRoute = createRoute({
   method: "post",

@@ -1,4 +1,4 @@
-CREATE TABLE `chat_sessions` (
+CREATE TABLE IF NOT EXISTS `chat_sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`article_ids` text NOT NULL,
@@ -6,7 +6,7 @@ CREATE TABLE `chat_sessions` (
 	`updated_at` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `spawned_artifacts` (
+CREATE TABLE IF NOT EXISTS `spawned_artifacts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
 	`type` text NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE `spawned_artifacts` (
 	`created_at` integer NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `sessions` (
+CREATE TABLE IF NOT EXISTS `sessions` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`user_id` integer NOT NULL,
 	`token` text NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE `sessions` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE TABLE `users` (
+CREATE TABLE IF NOT EXISTS `users` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`email` text NOT NULL,
 	`password_hash` text NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE `users` (
 	`updated_at` integer DEFAULT (unixepoch()) NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `dashboard_metrics` (
+CREATE TABLE IF NOT EXISTS `dashboard_metrics` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`metric_name` text NOT NULL,
 	`metric_value` real NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE `dashboard_metrics` (
 	`timestamp` integer DEFAULT (unixepoch()) NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `documents` (
+CREATE TABLE IF NOT EXISTS `documents` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`user_id` integer NOT NULL,
 	`title` text NOT NULL,
@@ -54,7 +54,7 @@ CREATE TABLE `documents` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE TABLE `messages` (
+CREATE TABLE IF NOT EXISTS `messages` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`thread_id` integer NOT NULL,
 	`role` text NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE `messages` (
 	FOREIGN KEY (`thread_id`) REFERENCES `threads`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE TABLE `threads` (
+CREATE TABLE IF NOT EXISTS `threads` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`user_id` integer NOT NULL,
 	`title` text NOT NULL,
@@ -73,7 +73,7 @@ CREATE TABLE `threads` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE TABLE `health_checks` (
+CREATE TABLE IF NOT EXISTS `health_checks` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`service_name` text NOT NULL,
 	`status` text NOT NULL,
@@ -82,7 +82,7 @@ CREATE TABLE `health_checks` (
 	`timestamp` integer DEFAULT (unixepoch()) NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE `notifications` (
+CREATE TABLE IF NOT EXISTS `notifications` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`user_id` integer NOT NULL,
 	`type` text NOT NULL,
@@ -93,5 +93,5 @@ CREATE TABLE `notifications` (
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `sessions_token_unique` ON `sessions` (`token`);--> statement-breakpoint
-CREATE UNIQUE INDEX `users_email_unique` ON `users` (`email`);
+CREATE UNIQUE INDEX IF NOT EXISTS `sessions_token_unique` ON `sessions` (`token`);--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS `users_email_unique` ON `users` (`email`);
