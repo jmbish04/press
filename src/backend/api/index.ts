@@ -23,10 +23,12 @@ import { logger } from "hono/logger";
 
 import * as schema from "../db/schemas/index";
 import { aiRouter } from "./routes/ai";
+import { articlesRouter } from "./routes/articles";
 import { authRouter } from "./routes/auth";
 import { dashboardRouter } from "./routes/dashboard";
 import { documentsRouter } from "./routes/documents";
 import { notificationsRouter } from "./routes/notifications";
+import { tagsRouter } from "./routes/tags";
 import { threadsRouter } from "./routes/threads";
 
 export type Bindings = {
@@ -295,6 +297,8 @@ app.all("/api/chat/*", async (c) => {
 });
 
 // Mount existing routers
+app.route("/api/articles", articlesRouter);
+app.route("/api/tags", tagsRouter);
 app.route("/api/auth", authRouter);
 app.route("/api/dashboard", dashboardRouter);
 app.route("/api/threads", threadsRouter);
