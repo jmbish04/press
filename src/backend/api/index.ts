@@ -16,12 +16,12 @@ import puppeteer from "@cloudflare/puppeteer";
 import { swaggerUI } from "@hono/swagger-ui";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { apiReference } from "@scalar/hono-api-reference";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
-import * as schema from "../db/schema";
+import * as schema from "../db/schemas/index";
 import { aiRouter } from "./routes/ai";
 import { authRouter } from "./routes/auth";
 import { dashboardRouter } from "./routes/dashboard";
@@ -89,7 +89,18 @@ const ingestRoute = createRoute({
 
 app.openapi(ingestRoute, async (c) => {
   const { urlsString } = c.req.valid("json");
-  const urls = urlsString.split(/\s+/).filter(Boolean);
+
+  // Rigorous URL extraction - handles multiple formats (iOS share sheet, comma-separated, newlines, etc.)
+  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`\[\]]+/gi;
+  const extractedUrls = urlsString.match(urlRegex) || [];
+  const urls = [...new Set(extractedUrls)].filter((url) => {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 
   // Asynchronously process to avoid blocking the HTTP response
   c.executionCtx.waitUntil(
@@ -97,20 +108,81 @@ app.openapi(ingestRoute, async (c) => {
       const db = drizzle(c.env.DB, { schema });
       const browser = await puppeteer.launch(c.env.BROWSER);
 
-      for (const link of urls) {
-        if (!link.trim()) continue;
+      // Define JSON schema for Workers AI structured outputs
+      const extractionSchema = {
+        type: "object",
+        properties: {
+          source: { type: "string" },
+          author: { type: "string" },
+          topic: { type: "string" },
+          summary: { type: "string" },
+          title: { type: "string" },
+        },
+        required: ["source", "author", "topic", "summary", "title"],
+      };
 
+      for (const link of urls) {
         try {
           const [article] = await db
             .insert(schema.articles)
-            .values({ url: link.trim() })
+            .values({ url: link })
             .onConflictDoNothing()
             .returning();
 
           if (!article) continue;
 
           const page = await browser.newPage();
-          await page.goto(article.url, { waitUntil: "domcontentloaded" });
+          await page.goto(article.url, { waitUntil: "networkidle0", timeout: 30000 });
+
+          // Smart screenshot capture with popup handling
+          try {
+            // Wait a bit for any late-loading elements
+            await page.waitForTimeout(2000);
+
+            // Attempt to dismiss common popups/overlays
+            const dismissSelectors = [
+              'button[aria-label*="close" i]',
+              'button[aria-label*="dismiss" i]',
+              ".cookie-banner button",
+              "#onetrust-accept-btn-handler",
+              '[class*="cookie"] button[class*="accept"]',
+              '[class*="modal"] [class*="close"]',
+              '[class*="popup"] [class*="close"]',
+            ];
+
+            for (const selector of dismissSelectors) {
+              try {
+                const element = await page.$(selector);
+                if (element) {
+                  await element.click();
+                  await page.waitForTimeout(500);
+                }
+              } catch {}
+            }
+
+            // Scroll to capture hero image if present
+            await page.evaluate(() => window.scrollTo(0, 200));
+            await page.waitForTimeout(1000);
+
+            // Take screenshot (focus on article content area if present)
+            const screenshotBuffer = await page.screenshot({
+              type: "jpeg",
+              quality: 85,
+              fullPage: false,
+            });
+
+            // For now, we'll store as base64 data URL (in production, upload to R2)
+            const screenshotDataUrl = `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`;
+
+            // Update article with screenshot
+            await db
+              .update(schema.articles)
+              .set({ screenshotUrl: screenshotDataUrl })
+              .where(eq(schema.articles.id, article.id));
+          } catch (screenshotErr) {
+            console.error(`Screenshot failed for ${link}:`, screenshotErr);
+          }
+
           const textContent = await page.evaluate(() => document.body.innerText);
           await page.close();
 
@@ -119,38 +191,73 @@ app.openapi(ingestRoute, async (c) => {
             .set({ rawContent: textContent })
             .where(eq(schema.articles.id, article.id));
 
-          // AI Structured Extraction via AI Gateway
-          const prompt = `Extract 'source', 'author', 'topic', and 'summary' from this text. Return strictly valid JSON.\n\nText:\n${textContent.substring(0, 4000)}`;
-          const aiResponse = await c.env.AI.run(
+          // AI Structured Extraction via AI Gateway with JSON Schema
+          const aiResponse: any = await c.env.AI.run(
             "@cf/meta/llama-3.1-8b-instruct",
             {
-              messages: [{ role: "user", content: prompt }],
+              messages: [
+                {
+                  role: "user",
+                  content: `Extract source, author, topic, title, and summary from this article text:\n\n${textContent.substring(0, 4000)}`,
+                },
+              ],
+              response_format: {
+                type: "json_schema",
+                json_schema: { schema: extractionSchema },
+              },
             },
-            { gateway: { id: c.env.AI_GATEWAY_ID, account: c.env.CF_ACCOUNT_ID } },
+            { gateway: { id: c.env.AI_GATEWAY_ID } },
           );
 
-          let structuredData: Record<string, string> = {};
-          try {
-            const jsonStr = (aiResponse.response as string).replace(/```json|```/g, "");
-            structuredData = JSON.parse(jsonStr);
-          } catch (e) {
-            console.error("JSON parse fail", e);
-          }
+          const structuredData: Record<string, string> =
+            aiResponse.response?.parsed || aiResponse.response || {};
 
-          // Loop over the structured response and save every property key into the mapping table
-          for (const [key, value] of Object.entries(structuredData)) {
-            let [propKey] = await db
+          // Batch optimization: Collect all property keys first
+          const propertyEntries = Object.entries(structuredData);
+          const propertyKeysToCheck = propertyEntries.map(([key]) => key);
+
+          // Batch read existing property keys using inArray
+          let existingKeys = [];
+          if (propertyKeysToCheck.length > 0) {
+            existingKeys = await db
               .select()
               .from(schema.propertyKeys)
-              .where(eq(schema.propertyKeys.key, key));
-            if (!propKey) {
-              [propKey] = await db.insert(schema.propertyKeys).values({ key }).returning();
+              .where(inArray(schema.propertyKeys.key, propertyKeysToCheck));
+          }
+
+          const existingKeyMap = new Map(existingKeys.map((k) => [k.key, k.id]));
+
+          // Identify new keys that need to be inserted
+          const newKeys = propertyKeysToCheck.filter((k) => !existingKeyMap.has(k));
+
+          // Batch insert new property keys (respecting D1 limit of ~100 params)
+          if (newKeys.length > 0) {
+            const BATCH_SIZE = 50;
+            for (let i = 0; i < newKeys.length; i += BATCH_SIZE) {
+              const batch = newKeys.slice(i, i + BATCH_SIZE);
+              const insertedKeys = await db
+                .insert(schema.propertyKeys)
+                .values(batch.map((key) => ({ key })))
+                .onConflictDoNothing()
+                .returning();
+
+              insertedKeys.forEach((k) => existingKeyMap.set(k.key, k.id));
             }
-            await db.insert(schema.articleProperties).values({
-              articleId: article.id,
-              propertyId: propKey.id,
-              value: String(value),
-            });
+          }
+
+          // Batch insert article properties
+          const propertyValues = propertyEntries.map(([key, value]) => ({
+            articleId: article.id,
+            propertyId: existingKeyMap.get(key)!,
+            value: String(value),
+          }));
+
+          if (propertyValues.length > 0) {
+            const BATCH_SIZE = 50;
+            for (let i = 0; i < propertyValues.length; i += BATCH_SIZE) {
+              const batch = propertyValues.slice(i, i + BATCH_SIZE);
+              await db.insert(schema.articleProperties).values(batch);
+            }
           }
 
           // Generate Embeddings
@@ -159,7 +266,7 @@ app.openapi(ingestRoute, async (c) => {
             {
               text: [textContent.substring(0, 2000)],
             },
-            { gateway: { id: c.env.AI_GATEWAY_ID, account: c.env.CF_ACCOUNT_ID } },
+            { gateway: { id: c.env.AI_GATEWAY_ID } },
           );
 
           await c.env.VECTORIZE.upsert([
@@ -177,7 +284,7 @@ app.openapi(ingestRoute, async (c) => {
     })(),
   );
 
-  return c.json({ status: "Processing started" }, 202);
+  return c.json({ status: "Processing started", urlsFound: urls.length }, 202);
 });
 
 // Route WebSocket connections to the Agent
