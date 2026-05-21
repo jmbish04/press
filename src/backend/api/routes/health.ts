@@ -6,11 +6,9 @@ import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
 
-import type { Bindings } from "../index";
-
 import { healthChecks } from "../../db/schema";
 
-const healthRouter = new Hono<{ Bindings: Bindings }>();
+const healthRouter = new Hono<{ Bindings: Env }>();
 
 // GET /api/health
 healthRouter.get("/", async (c) => {
@@ -83,7 +81,7 @@ healthRouter.get("/history", async (c) => {
   const limit = parseInt(c.req.query("limit") || "100");
 
   try {
-    let query = db.select().from(healthChecks);
+    let query = db.select().from(healthChecks).$dynamic();
 
     if (service) {
       query = query.where(eq(healthChecks.serviceName, service));

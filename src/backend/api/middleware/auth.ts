@@ -7,12 +7,12 @@ import type { Context, Next } from "hono";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 
-import type { Bindings, Variables } from "../index";
+import type { Variables } from "../index";
 
 import { sessions, users } from "../../db/schema";
 
 export async function authMiddleware(
-  c: Context<{ Bindings: Bindings; Variables: Variables }>,
+  c: Context<{ Bindings: Env; Variables: Variables }>,
   next: Next,
 ) {
   const authHeader = c.req.header("Authorization");
@@ -43,7 +43,7 @@ export async function authMiddleware(
 
     const session = sessionResult[0];
 
-    if (session.expiresAt * 1000 < Date.now()) {
+    if (session.expiresAt.getTime() < Date.now()) {
       return c.json({ error: "Session expired" }, 401);
     }
 

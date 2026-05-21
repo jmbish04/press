@@ -1,0 +1,6 @@
+/**
+ * @fileoverview Barrel for the agent Durable Object classes.
+ */
+
+export { NewsAgent } from "./newsAgent";
+export { ArticleChatAgent } from "./articleChat";

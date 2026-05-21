@@ -1,6 +1,6 @@
 {
   "name": "press",
-  "main": "dist/_worker.js/index.js",
+  "main": "src/_worker.ts",
   "compatibility_date": "2026-03-09",
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
@@ -124,11 +124,21 @@
   "browser": {
     "binding": "BROWSER",
   },
+  "r2_buckets": [
+    {
+      "binding": "SPAWNED_PWAS",
+      "bucket_name": "press-spawned-pwas",
+    },
+  ],
   "durable_objects": {
     "bindings": [
       {
         "name": "NEWS_AGENT",
         "class_name": "NewsAgent",
+      },
+      {
+        "name": "ARTICLE_CHAT_AGENT",
+        "class_name": "ArticleChatAgent",
       },
     ],
   },
@@ -136,6 +146,10 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["NewsAgent"],
+    },
+    {
+      "tag": "v2-article-chat",
+      "new_sqlite_classes": ["ArticleChatAgent"],
     },
   ],
 }

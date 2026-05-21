@@ -6,12 +6,12 @@ import { desc, eq, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
 
-import type { Bindings, Variables } from "../index";
+import type { Variables } from "../index";
 
 import { notifications } from "../../db/schema";
 import { authMiddleware } from "../middleware/auth";
 
-const notificationsRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+const notificationsRouter = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware
 notificationsRouter.use("*", authMiddleware);
@@ -23,7 +23,7 @@ notificationsRouter.get("/", async (c) => {
   const unreadOnly = c.req.query("unreadOnly") === "true";
 
   try {
-    let query = db.select().from(notifications).where(eq(notifications.userId, userId));
+    let query = db.select().from(notifications).where(eq(notifications.userId, userId)).$dynamic();
 
     if (unreadOnly) {
       query = query.where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
