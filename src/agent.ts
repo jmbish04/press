@@ -1,6 +1,6 @@
 import type { D1Database, VectorizeIndex, Ai, Fetcher } from "@cloudflare/workers-types";
 
-import { AIChatAgent } from "agents";
+import { Agent } from "agents";
 import { inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 
@@ -16,7 +16,7 @@ export interface Env {
   CF_ACCOUNT_ID: string;
 }
 
-export class NewsAgent extends AIChatAgent<Env> {
+export class NewsAgent extends Agent<Env> {
   async onStart() {
     this.chat.system = `You are a helpful knowledge assistant analyzing the user's archived Chrome tabs. Use your tools to find relevant articles.`;
 
