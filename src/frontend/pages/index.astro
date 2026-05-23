@@ -16,7 +16,13 @@ import { Dashboard } from '../components/Dashboard.tsx';
           <h1 class="text-4xl font-bold uppercase tracking-widest text-foreground">The Archive</h1>
           <p class="text-muted-foreground mt-2 text-sm uppercase tracking-wider">Automated Ingestion & RAG Engine</p>
         </div>
-        <nav>
+        <nav class="flex gap-2">
+          <a
+            href="/articles"
+            class="border border-input px-4 py-2 text-xs font-medium uppercase tracking-widest hover:bg-muted"
+          >
+            Articles
+          </a>
           <a
             href="/notebook"
             class="border border-input px-4 py-2 text-xs font-medium uppercase tracking-widest hover:bg-muted"
