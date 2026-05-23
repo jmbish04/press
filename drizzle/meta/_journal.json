@@ -15,6 +15,13 @@
       "when": 1779348345398,
       "tag": "0001_foamy_kronos",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779567488934,
+      "tag": "0002_worthless_multiple_man",
+      "breakpoints": true
     }
   ]
 }

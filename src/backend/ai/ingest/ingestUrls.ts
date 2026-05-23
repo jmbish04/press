@@ -116,13 +116,36 @@ export async function ingestUrls(env: Env, urls: string[]): Promise<IngestResult
     for (const article of newArticles) {
       try {
         const page = await browser.newPage();
+        await page.setViewport({ width: 1280, height: 800 });
         await page.goto(article.url, { waitUntil: "domcontentloaded" });
+        // Let the page settle so screenshots and content extraction are stable.
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
         const textContent = (await page.evaluate(() => document.body.innerText)) ?? "";
+
+        // Screenshot best-effort — never fail the article on screenshot errors.
+        let screenshotKey: string | undefined;
+        try {
+          const buf = (await page.screenshot({ type: "jpeg", quality: 75 })) as Uint8Array;
+          screenshotKey = `screenshots/${article.id}.jpg`;
+          await env.SPAWNED_PWAS.put(screenshotKey, buf, {
+            httpMetadata: {
+              contentType: "image/jpeg",
+              cacheControl: "public, max-age=31536000",
+            },
+          });
+        } catch (err) {
+          console.error(`Screenshot failed for ${article.url}`, err);
+        }
+
         await page.close();
 
         await db
           .update(articles)
-          .set({ rawContent: textContent })
+          .set({
+            rawContent: textContent,
+            ...(screenshotKey ? { screenshotKey } : {}),
+          })
           .where(inArray(articles.id, [article.id]));
 
         if (textContent.trim().length < MIN_CONTENT_LENGTH) {

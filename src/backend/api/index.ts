@@ -16,11 +16,13 @@ import { extractUrls } from "../ai/ingest/extractUrls";
 import { ingestUrls } from "../ai/ingest/ingestUrls";
 import { apiKeyMiddleware } from "./middleware/apiKey";
 import { aiRouter } from "./routes/ai";
+import { articlesRouter } from "./routes/articles";
 import { artifactAssetsRouter, artifactsRouter } from "./routes/artifacts";
 import { authRouter } from "./routes/auth";
 import { dashboardRouter } from "./routes/dashboard";
 import { documentsRouter } from "./routes/documents";
 import { notificationsRouter } from "./routes/notifications";
+import { tagsRouter } from "./routes/tags";
 import { threadsRouter } from "./routes/threads";
 
 /** Hono context variables set by middleware. */
@@ -123,6 +125,8 @@ app.route("/api/threads", threadsRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/ai", aiRouter);
 app.route("/api/documents", documentsRouter);
+app.route("/api/articles", articlesRouter);
+app.route("/api/tags", tagsRouter);
 app.route("/api/artifacts", artifactsRouter);
 app.route("/artifacts", artifactAssetsRouter);
 
