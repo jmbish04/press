@@ -246,6 +246,32 @@ export function IngestQueue() {
   const [confirm, setConfirm] = useState<PendingDelete | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  /**
+   * iOS Safari can fire `onChange` on a controlled textarea with only a
+   * fragment of a long paste, which then re-renders the textarea back to that
+   * fragment and drops the rest. Reading `clipboardData` ourselves bypasses
+   * the race — we also accept `text/uri-list` for multi-link clipboards
+   * (e.g. the iOS share-sheet "Copy" of several Safari tabs).
+   */
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const dt = e.clipboardData;
+    const text = dt.getData("text/plain") || dt.getData("text/uri-list") || dt.getData("text");
+    if (!text) return;
+
+    e.preventDefault();
+    const target = e.currentTarget;
+    const start = target.selectionStart ?? paste.length;
+    const end = target.selectionEnd ?? paste.length;
+    const next = paste.slice(0, start) + text + paste.slice(end);
+    setPaste(next);
+
+    // Restore the caret to just after the pasted block on the next frame.
+    const caret = start + text.length;
+    requestAnimationFrame(() => {
+      target.setSelectionRange(caret, caret);
+    });
+  };
+
   const agent = useAgent<IngestAgent, IngestState>({
     agent: "IngestAgent",
     name: "main",
@@ -404,6 +430,7 @@ export function IngestQueue() {
           <Textarea
             value={paste}
             onChange={(e) => setPaste(e.target.value)}
+            onPaste={handlePaste}
             placeholder={`Paste anything — a share-sheet dump, a notes export, an email…
 URLs are auto-extracted, deduplicated, and grouped by domain on the next step.`}
             className="min-h-[200px] font-mono text-xs"
