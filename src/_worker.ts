@@ -22,6 +22,7 @@ import { app as honoApp } from "./backend/api/index";
 // Durable Object classes must be exported from the worker entry point.
 export { NewsAgent } from "./backend/ai/agents/newsAgent";
 export { ArticleChatAgent } from "./backend/ai/agents/articleChat";
+export { IngestAgent } from "./backend/ai/agents/ingestAgent";
 
 const astro = astroWorker as ExportedHandler<Env>;
 

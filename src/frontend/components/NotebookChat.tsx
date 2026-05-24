@@ -346,7 +346,7 @@ export function NotebookChat({ articles, sessionId }: NotebookChatProps) {
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="bg-background text-foreground flex h-screen gap-2 overflow-hidden p-2">
+      <div className="bg-background text-foreground flex h-full gap-2 overflow-hidden p-2">
         <SourcesPanel
           articles={articles}
           pinned={pinned}

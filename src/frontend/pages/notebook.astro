@@ -2,6 +2,7 @@
 import { desc } from "drizzle-orm";
 
 import "../styles/global.css";
+import NavHeader from "../components/NavHeader.astro";
 import { NotebookChat, type NotebookArticle } from "../components/NotebookChat";
 import { getDb } from "../../backend/db";
 import { articles } from "../../backend/db/schemas";
@@ -33,7 +34,10 @@ const sessionId = Astro.url.searchParams.get("session") ?? "default";
     <meta name="viewport" content="width=device-width" />
     <title>Notebook · The Archive</title>
   </head>
-  <body class="bg-background text-foreground antialiased">
-    <NotebookChat client:only="react" articles={articleList} sessionId={sessionId} />
+  <body class="bg-background text-foreground flex h-screen flex-col antialiased">
+    <NavHeader current="notebook" />
+    <div class="min-h-0 flex-1">
+      <NotebookChat client:only="react" articles={articleList} sessionId={sessionId} />
+    </div>
   </body>
 </html>

@@ -146,6 +146,10 @@
         "name": "ARTICLE_CHAT_AGENT",
         "class_name": "ArticleChatAgent",
       },
+      {
+        "name": "INGEST_AGENT",
+        "class_name": "IngestAgent",
+      },
     ],
   },
   "migrations": [
@@ -156,6 +160,10 @@
     {
       "tag": "v2-article-chat",
       "new_sqlite_classes": ["ArticleChatAgent"],
+    },
+    {
+      "tag": "v3-ingest-agent",
+      "new_sqlite_classes": ["IngestAgent"],
     },
   ],
 }

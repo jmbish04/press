@@ -56,7 +56,7 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "remark-gfm": "^4.0.1",
-    "shadcn": "^4.5.0",
+    "shadcn": "^4.8.0",
     "slate": "^0.124.1",
     "slate-history": "^0.113.1",
     "slate-react": "^0.124.0",

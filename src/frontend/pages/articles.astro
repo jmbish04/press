@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import NavHeader from "../components/NavHeader.astro";
 import { ArticlesBrowse } from "../components/ArticlesBrowse";
 ---
 
@@ -10,6 +11,7 @@ import { ArticlesBrowse } from "../components/ArticlesBrowse";
     <title>Articles · The Archive</title>
   </head>
   <body class="bg-background text-foreground min-h-screen antialiased">
+    <NavHeader current="articles" />
     <ArticlesBrowse client:load />
   </body>
 </html>

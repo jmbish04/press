@@ -1,0 +1,36 @@
+---
+interface Props {
+  current?: "ingest" | "articles" | "notebook";
+}
+
+const { current } = Astro.props as Props;
+
+const items = [
+  { href: "/", label: "Ingest", key: "ingest" as const },
+  { href: "/articles", label: "Articles", key: "articles" as const },
+  { href: "/notebook", label: "Notebook", key: "notebook" as const },
+];
+---
+
+<header class="border-border bg-background sticky top-0 z-30 border-b">
+  <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
+    <a href="/" class="text-base font-semibold tracking-tight">The Archive</a>
+    <nav class="flex items-center gap-1">
+      {items.map((item) => {
+        const active = current === item.key;
+        return (
+          <a
+            href={item.href}
+            class={`inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors ${
+              active
+                ? "bg-secondary text-secondary-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            }`}
+          >
+            {item.label}
+          </a>
+        );
+      })}
+    </nav>
+  </div>
+</header>

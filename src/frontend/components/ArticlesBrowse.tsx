@@ -548,14 +548,6 @@ export function ArticlesBrowse() {
             {filtered.length !== articles.length ? ` · ${filtered.length} match` : ""}
           </p>
         </div>
-        <nav className="flex gap-2">
-          <a href="/" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Home
-          </a>
-          <a href="/notebook" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Notebook
-          </a>
-        </nav>
       </header>
 
       <div className="flex gap-6">
