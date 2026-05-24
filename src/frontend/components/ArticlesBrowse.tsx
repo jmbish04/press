@@ -1,4 +1,4 @@
-import { ExternalLink, Search, Tag as TagIcon, X } from "lucide-react";
+import { BookOpen, ExternalLink, FilterX, Search, Sparkles, Tag as TagIcon, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "../lib/utils";
@@ -6,9 +6,9 @@ import { Badge } from "./ui/badge";
 import { Button, buttonVariants } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Separator } from "./ui/separator";
+import { Skeleton } from "./ui/skeleton";
 
 interface Tag {
   id: number;
@@ -128,7 +128,91 @@ function ArticleCard({ article, onOpen }: { article: Article; onOpen: () => void
   );
 }
 
-/* ── tag picker (used in sidebar + detail view) ──────────────────────── */
+/* ── skeleton card (loading state) ────────────────────────────────────── */
+
+function ArticleCardSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <Skeleton className="aspect-[16/10] w-full rounded-none" />
+      <CardHeader className="space-y-2">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-5/6" />
+        <Skeleton className="h-3 w-2/3" />
+        <div className="flex gap-1 pt-1">
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-5 w-12 rounded-full" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ArticleGridSkeleton({ count = 6 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <ArticleCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+/* ── empty states ─────────────────────────────────────────────────────── */
+
+function EmptyArchive() {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <div className="bg-secondary text-secondary-foreground flex size-16 items-center justify-center rounded-full">
+          <BookOpen className="size-7" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold">Your archive is empty</h2>
+          <p className="text-muted-foreground max-w-sm text-sm">
+            Paste a few article URLs on the Ingest page and we'll render, summarise, and tag them —
+            they'll show up here in seconds.
+          </p>
+        </div>
+        <a
+          href="/"
+          className={cn(buttonVariants({ variant: "default", size: "sm" }), "mt-2 gap-1")}
+        >
+          <Sparkles className="size-3.5" />
+          Start ingesting
+        </a>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyMatches({ onReset }: { onReset: () => void }) {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <div className="bg-secondary text-secondary-foreground flex size-16 items-center justify-center rounded-full">
+          <FilterX className="size-7" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold">No matches</h2>
+          <p className="text-muted-foreground max-w-sm text-sm">
+            Nothing in the archive lines up with the current search and tag filters. Try loosening
+            them.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onReset} className="mt-2 gap-1">
+          <FilterX className="size-3.5" />
+          Clear filters
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── tag picker (used in toolbar + detail view) ──────────────────────── */
 
 function TagPicker({
   tags,
@@ -213,9 +297,9 @@ function TagPicker({
   );
 }
 
-/* ── filter sidebar ──────────────────────────────────────────────────── */
+/* ── filter toolbar (top of page, horizontal) ─────────────────────────── */
 
-function FilterSidebar({
+function FilterToolbar({
   tags,
   filterTags,
   setFilterTags,
@@ -224,6 +308,7 @@ function FilterSidebar({
   groupBy,
   setGroupBy,
   onCreateTag,
+  loading,
 }: {
   tags: Tag[];
   filterTags: Set<number>;
@@ -233,89 +318,114 @@ function FilterSidebar({
   groupBy: GroupBy;
   setGroupBy: (g: GroupBy) => void;
   onCreateTag: (name: string) => Promise<void>;
+  loading: boolean;
 }) {
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-3 py-3">
+          <Skeleton className="h-9 w-64" />
+          <Skeleton className="h-9 w-56" />
+          <Skeleton className="h-9 w-32" />
+        </CardContent>
+      </Card>
+    );
+  }
+
   const selectedTags = tags.filter((t) => filterTags.has(t.id));
 
   return (
-    <aside className="w-64 shrink-0 space-y-6">
-      <div className="space-y-2">
-        <Label className="text-muted-foreground text-xs uppercase tracking-wider">Search</Label>
-        <div className="relative">
-          <Search className="text-muted-foreground absolute left-2 top-2.5 h-4 w-4" />
+    <Card>
+      <CardContent className="flex flex-col gap-3 py-3 lg:flex-row lg:flex-wrap lg:items-center">
+        <div className="relative w-full lg:w-72">
+          <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Title or summary…"
-            className="pl-8"
+            placeholder="Search title, summary, or host…"
+            className="pl-9"
           />
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label className="text-muted-foreground text-xs uppercase tracking-wider">Group by</Label>
-        <div className="flex flex-wrap gap-1">
+        <Separator orientation="vertical" className="hidden h-7 lg:block" />
+
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground mr-1 text-xs uppercase tracking-wider">Group</span>
           {(["none", "topic", "source", "tag"] as const).map((option) => (
             <Button
               key={option}
               variant={groupBy === option ? "default" : "outline"}
               size="sm"
               onClick={() => setGroupBy(option)}
+              className="capitalize"
             >
               {option === "none" ? "Flat" : option}
             </Button>
           ))}
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-muted-foreground text-xs uppercase tracking-wider">Tags</Label>
+        <Separator orientation="vertical" className="hidden h-7 lg:block" />
+
+        <div className="flex flex-wrap items-center gap-2">
+          <TagPicker
+            tags={tags}
+            selected={filterTags}
+            onChange={setFilterTags}
+            onCreate={onCreateTag}
+            triggerContent={
+              <>
+                <TagIcon className="mr-2 size-3" />
+                {filterTags.size === 0 ? "Filter tags" : `${filterTags.size} tag(s)`}
+              </>
+            }
+          />
+          {selectedTags.map((tag) => (
+            <Badge key={tag.id} variant="secondary" className="gap-1">
+              {tag.name}
+              <button
+                onClick={() => {
+                  const next = new Set(filterTags);
+                  next.delete(tag.id);
+                  setFilterTags(next);
+                }}
+                aria-label={`Remove ${tag.name} filter`}
+              >
+                <X className="size-3" />
+              </button>
+            </Badge>
+          ))}
           {filterTags.size > 0 && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setFilterTags(new Set())}
-              className="text-muted-foreground hover:text-foreground text-xs"
+              className="text-muted-foreground"
             >
-              clear
-            </button>
+              Clear
+            </Button>
           )}
         </div>
-        <TagPicker
-          tags={tags}
-          selected={filterTags}
-          onChange={setFilterTags}
-          onCreate={onCreateTag}
-          triggerClass="w-full justify-start"
-          triggerContent={
-            <>
-              <TagIcon className="mr-2 h-3 w-3" />
-              {filterTags.size === 0 ? "Filter by tag" : `${filterTags.size} tag(s) selected`}
-            </>
-          }
-        />
-        {selectedTags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {selectedTags.map((tag) => (
-              <Badge key={tag.id} variant="secondary" className="gap-1">
-                {tag.name}
-                <button
-                  onClick={() => {
-                    const next = new Set(filterTags);
-                    next.delete(tag.id);
-                    setFilterTags(next);
-                  }}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-        )}
-      </div>
-    </aside>
+      </CardContent>
+    </Card>
   );
 }
 
 /* ── article detail modal ────────────────────────────────────────────── */
+
+function ArticleDetailSkeleton() {
+  return (
+    <div className="space-y-3 p-6">
+      <Skeleton className="h-5 w-2/3" />
+      <Skeleton className="h-3 w-1/3" />
+      <Separator className="my-2" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-5/6" />
+      <Skeleton className="h-3 w-4/5" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-3/4" />
+    </div>
+  );
+}
 
 function ArticleDetailDialog({
   articleId,
@@ -386,11 +496,11 @@ function ArticleDetailDialog({
     >
       <div className="bg-background flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg border shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b p-4">
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-semibold">{detail?.title ?? "Loading…"}</h2>
-            <p className="text-muted-foreground flex items-center gap-2 text-xs">
-              {detail && (
-                <>
+          <div className="min-w-0 flex-1 space-y-1">
+            {detail ? (
+              <>
+                <h2 className="truncate text-lg font-semibold">{detail.title}</h2>
+                <p className="text-muted-foreground flex items-center gap-2 text-xs">
                   <span className="truncate">{detail.host}</span>
                   <a
                     href={detail.url}
@@ -398,14 +508,19 @@ function ArticleDetailDialog({
                     rel="noopener noreferrer"
                     className="hover:text-foreground inline-flex items-center gap-1"
                   >
-                    open <ExternalLink className="h-3 w-3" />
+                    open <ExternalLink className="size-3" />
                   </a>
-                </>
-              )}
-            </p>
+                </p>
+              </>
+            ) : (
+              <>
+                <Skeleton className="h-5 w-1/2" />
+                <Skeleton className="h-3 w-1/3" />
+              </>
+            )}
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
-            <X className="h-4 w-4" />
+            <X className="size-4" />
           </Button>
         </header>
 
@@ -421,7 +536,7 @@ function ArticleDetailDialog({
             </Button>
           ))}
 
-          <div className="mx-2 h-6 w-px bg-border" />
+          <Separator orientation="vertical" className="mx-2 h-6" />
 
           <TagPicker
             tags={tags}
@@ -433,7 +548,7 @@ function ArticleDetailDialog({
             disabled={!detail || saving}
             triggerContent={
               <>
-                <TagIcon className="mr-2 h-3 w-3" />
+                <TagIcon className="mr-2 size-3" />
                 Tags ({detail?.tags.length ?? 0})
               </>
             }
@@ -451,24 +566,24 @@ function ArticleDetailDialog({
         </div>
 
         <div className="bg-muted/30 min-h-0 flex-1 overflow-hidden">
-          {!detail && <p className="text-muted-foreground p-8 text-center text-sm">Loading…</p>}
+          {!detail && <ArticleDetailSkeleton />}
           {detail && view === "iframe" && (
             <iframe
               src={detail.url}
               title={detail.title}
-              className="h-full w-full"
+              className="size-full"
               sandbox="allow-scripts allow-same-origin allow-forms"
             />
           )}
           {detail && view === "pdf" && (
-            <iframe src={detail.pdfUrl} title={`${detail.title} PDF`} className="h-full w-full" />
+            <iframe src={detail.pdfUrl} title={`${detail.title} PDF`} className="size-full" />
           )}
           {detail && view === "markdown" && (
             <article className="prose prose-sm dark:prose-invert max-w-none overflow-y-auto p-6">
               {detail.rawContent ? (
                 detail.rawContent.split(/\n\n+/).map((para, i) => <p key={i}>{para.trim()}</p>)
               ) : (
-                <p className="text-muted-foreground">No extracted content.</p>
+                <p className="text-muted-foreground">No extracted content yet.</p>
               )}
             </article>
           )}
@@ -538,36 +653,53 @@ export function ArticlesBrowse() {
 
   const grouped = useMemo(() => groupArticles(filtered, groupBy), [filtered, groupBy]);
 
+  const filtersActive = search.trim().length > 0 || filterTags.size > 0;
+
   return (
-    <div className="mx-auto max-w-7xl p-6">
-      <header className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Archive</h1>
-          <p className="text-muted-foreground text-sm">
-            {articles.length} article{articles.length === 1 ? "" : "s"}
-            {filtered.length !== articles.length ? ` · ${filtered.length} match` : ""}
-          </p>
-        </div>
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
+      <header className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight">Archive</h1>
+        <p className="text-muted-foreground text-sm">
+          {loading ? (
+            <Skeleton className="inline-block h-3 w-32" />
+          ) : (
+            <>
+              {articles.length} article{articles.length === 1 ? "" : "s"}
+              {filtered.length !== articles.length ? ` · ${filtered.length} match` : ""}
+            </>
+          )}
+        </p>
       </header>
 
-      <div className="flex gap-6">
-        <FilterSidebar
-          tags={tags}
-          filterTags={filterTags}
-          setFilterTags={setFilterTags}
-          search={search}
-          setSearch={setSearch}
-          groupBy={groupBy}
-          setGroupBy={setGroupBy}
-          onCreateTag={createTag}
-        />
+      <FilterToolbar
+        tags={tags}
+        filterTags={filterTags}
+        setFilterTags={setFilterTags}
+        search={search}
+        setSearch={setSearch}
+        groupBy={groupBy}
+        setGroupBy={setGroupBy}
+        onCreateTag={createTag}
+        loading={loading}
+      />
 
-        <main className="min-w-0 flex-1 space-y-10">
-          {loading && <p className="text-muted-foreground text-sm">Loading articles…</p>}
-          {!loading && filtered.length === 0 && (
-            <p className="text-muted-foreground text-sm">No articles match these filters yet.</p>
-          )}
-          {grouped.map((group) => (
+      <main className="space-y-10">
+        {loading && <ArticleGridSkeleton />}
+
+        {!loading && articles.length === 0 && <EmptyArchive />}
+
+        {!loading && articles.length > 0 && filtered.length === 0 && (
+          <EmptyMatches
+            onReset={() => {
+              setSearch("");
+              setFilterTags(new Set());
+            }}
+          />
+        )}
+
+        {!loading &&
+          filtered.length > 0 &&
+          grouped.map((group) => (
             <section key={group.label}>
               {groupBy !== "none" && (
                 <h2 className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-wider">
@@ -585,8 +717,7 @@ export function ArticlesBrowse() {
               </div>
             </section>
           ))}
-        </main>
-      </div>
+      </main>
 
       {activeId !== null && (
         <ArticleDetailDialog

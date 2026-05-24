@@ -2,7 +2,14 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useAgent } from "agents/react";
-import { ExternalLink, PanelLeftClose, PanelRightClose, Tag as TagIcon } from "lucide-react";
+import {
+  ExternalLink,
+  FileStack,
+  Inbox,
+  PanelLeftClose,
+  PanelRightClose,
+  Tag as TagIcon,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import type { ArticleChatState } from "../../backend/ai/agents/articleChat";
@@ -13,6 +20,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { MindMap, MindMapControls } from "./ui/mindmap";
 import { Separator } from "./ui/separator";
+import { Skeleton } from "./ui/skeleton";
 
 export interface NotebookArticle {
   id: number;
@@ -104,9 +112,14 @@ function SourcesPanel({
       <Separator />
       <CardContent className="flex-1 overflow-y-auto p-0">
         {articles.length === 0 && (
-          <p className="text-muted-foreground px-4 py-6 text-center text-xs">
-            No articles archived yet.
-          </p>
+          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+            <div className="bg-secondary text-secondary-foreground flex size-10 items-center justify-center rounded-full">
+              <Inbox className="size-4" />
+            </div>
+            <p className="text-muted-foreground text-xs">
+              No articles archived yet. Paste some URLs on the Ingest page.
+            </p>
+          </div>
         )}
         {articles.map((article) => (
           <label
@@ -136,11 +149,13 @@ function SourcesPanel({
 
 function ArtifactsPanel({
   artifacts,
+  loading,
   onPreview,
   open,
   onToggle,
 }: {
   artifacts: SpawnedArtifact[];
+  loading: boolean;
   onPreview: (artifact: SpawnedArtifact) => void;
   open: boolean;
   onToggle: () => void;
@@ -167,39 +182,59 @@ function ArtifactsPanel({
       </CardHeader>
       <Separator />
       <CardContent className="flex-1 overflow-y-auto p-0">
-        {artifacts.length === 0 && (
-          <p className="text-muted-foreground px-4 py-6 text-center text-xs">
-            Ask the agent to spawn a PWA or summary to see it here.
-          </p>
-        )}
-        {artifacts.map((artifact) => (
-          <div key={artifact.id} className="border-border/40 hover:bg-muted/50 border-b px-4 py-3">
-            <p className="truncate text-xs font-medium">{artifact.title}</p>
-            <p className="text-muted-foreground mb-2 text-[10px] capitalize">
-              {ARTIFACT_LABELS[artifact.type] ?? artifact.type}
-            </p>
-            {artifact.publicUrl && (
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 px-2 text-xs"
-                  onClick={() => onPreview(artifact)}
-                >
-                  Preview
-                </Button>
-                <a
-                  href={artifact.publicUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
-                >
-                  Open <ExternalLink className="h-3 w-3" />
-                </a>
+        {loading && (
+          <div className="space-y-3 px-4 py-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-5 w-16 rounded-full" />
               </div>
-            )}
+            ))}
           </div>
-        ))}
+        )}
+        {!loading && artifacts.length === 0 && (
+          <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+            <div className="bg-secondary text-secondary-foreground flex size-10 items-center justify-center rounded-full">
+              <FileStack className="size-4" />
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Ask the agent to spawn a PWA, summary, or mind map and it'll appear here.
+            </p>
+          </div>
+        )}
+        {!loading &&
+          artifacts.map((artifact) => (
+            <div
+              key={artifact.id}
+              className="border-border/40 hover:bg-muted/50 border-b px-4 py-3"
+            >
+              <p className="truncate text-xs font-medium">{artifact.title}</p>
+              <p className="text-muted-foreground mb-2 text-[10px] capitalize">
+                {ARTIFACT_LABELS[artifact.type] ?? artifact.type}
+              </p>
+              {artifact.publicUrl && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => onPreview(artifact)}
+                  >
+                    Preview
+                  </Button>
+                  <a
+                    href={artifact.publicUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+                  >
+                    Open <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
+            </div>
+          ))}
       </CardContent>
     </Card>
   );
@@ -289,6 +324,7 @@ function ArtifactPreviewModal({
 export function NotebookChat({ articles, sessionId }: NotebookChatProps) {
   const [pinned, setPinned] = useState<Set<number>>(new Set());
   const [artifacts, setArtifacts] = useState<SpawnedArtifact[]>([]);
+  const [artifactsLoading, setArtifactsLoading] = useState(true);
   const [sourcesOpen, setSourcesOpen] = useState(true);
   const [artifactsOpen, setArtifactsOpen] = useState(true);
   const [preview, setPreview] = useState<SpawnedArtifact | null>(null);
@@ -333,6 +369,8 @@ export function NotebookChat({ articles, sessionId }: NotebookChatProps) {
       if (res.ok) setArtifacts((await res.json()) as SpawnedArtifact[]);
     } catch {
       // Ignore transient fetch failures.
+    } finally {
+      setArtifactsLoading(false);
     }
   }, [sessionId]);
 
@@ -378,6 +416,7 @@ export function NotebookChat({ articles, sessionId }: NotebookChatProps) {
 
         <ArtifactsPanel
           artifacts={artifacts}
+          loading={artifactsLoading}
           onPreview={setPreview}
           open={artifactsOpen}
           onToggle={() => setArtifactsOpen((o) => !o)}
