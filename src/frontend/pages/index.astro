@@ -1,31 +1,31 @@
 ---
-import '../styles/global.css';
-import { Dashboard } from '../components/Dashboard.tsx';
+import "../styles/global.css";
+import { Dashboard } from "../components/Dashboard.tsx";
 ---
 
 <html lang="en" class="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
-    <title>Monolith Archive</title>
+    <title>The Archive</title>
   </head>
-  <body class="min-h-screen bg-background text-foreground p-8 antialiased">
-    <main class="max-w-7xl mx-auto space-y-12">
-      <header class="flex items-end justify-between">
+  <body class="bg-background text-foreground min-h-screen antialiased">
+    <main class="mx-auto max-w-7xl space-y-8 p-6 lg:p-10">
+      <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 class="text-4xl font-bold uppercase tracking-widest text-foreground">The Archive</h1>
-          <p class="text-muted-foreground mt-2 text-sm uppercase tracking-wider">Automated Ingestion & RAG Engine</p>
+          <h1 class="text-3xl font-bold tracking-tight">The Archive</h1>
+          <p class="text-muted-foreground mt-1 text-sm">Automated ingestion and RAG over your saved articles.</p>
         </div>
         <nav class="flex gap-2">
           <a
             href="/articles"
-            class="border border-input px-4 py-2 text-xs font-medium uppercase tracking-widest hover:bg-muted"
+            class="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium shadow-sm transition-colors"
           >
             Articles
           </a>
           <a
             href="/notebook"
-            class="border border-input px-4 py-2 text-xs font-medium uppercase tracking-widest hover:bg-muted"
+            class="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-9 items-center justify-center rounded-md border px-4 text-sm font-medium shadow-sm transition-colors"
           >
             Notebook
           </a>

@@ -1,49 +1,91 @@
-import React, { useState } from "react";
+import { useState } from "react";
 
 import { AssistantChat } from "./AssistantChat";
 import { Button } from "./ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Textarea } from "./ui/textarea";
 
+/**
+ * Home-page dashboard: paste-URLs ingestion + the news-archive assistant chat.
+ * Both panels are shadcn Card primitives; the assistant chat is rendered via
+ * the assistant-ui Thread component inside the AssistantChat island.
+ */
 export function Dashboard() {
   const [urls, setUrls] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<null | { kind: "ok" | "err"; text: string }>(null);
 
   const handleIngest = async () => {
-    if (!urls) return;
-    await fetch("/api/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urlsString: urls }),
-    });
-    setUrls("");
-    alert("Ingestion started via Browser Run.");
+    const text = urls.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const res = await fetch("/api/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urlsString: text }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { status?: string };
+        setStatus({ kind: "ok", text: data.status ?? "Accepted." });
+        setUrls("");
+      } else if (res.status === 401) {
+        setStatus({
+          kind: "err",
+          text: "Ingest requires a Bearer token (env.WORKER_API_KEY).",
+        });
+      } else {
+        setStatus({ kind: "err", text: `Failed (${res.status}).` });
+      }
+    } catch (err) {
+      setStatus({
+        kind: "err",
+        text: err instanceof Error ? err.message : "Request failed.",
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <div className="space-y-4">
-        <div className="p-6 border rounded-none bg-card text-card-foreground shadow-sm">
-          <h2 className="text-lg font-semibold uppercase tracking-wider mb-4">
-            Ingest Data Stream
-          </h2>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Ingest URLs</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
           <Textarea
             value={urls}
             onChange={(e) => setUrls(e.target.value)}
-            placeholder="Paste raw URL block here..."
-            className="flex min-h-[120px] w-full border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring mb-4 rounded-none font-mono text-xs"
+            placeholder="Paste a block of URLs — share-sheet dumps, newlines, mixed punctuation are all fine."
+            className="min-h-[140px] font-mono text-xs"
           />
-          <Button
-            onClick={handleIngest}
-            className="inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-4 py-2 w-full uppercase tracking-widest rounded-none"
-          >
-            Process Tabs
+          {status && (
+            <p
+              className={
+                status.kind === "ok" ? "text-muted-foreground text-xs" : "text-destructive text-xs"
+              }
+            >
+              {status.text}
+            </p>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleIngest} disabled={busy || urls.trim().length === 0}>
+            {busy ? "Processing…" : "Process URLs"}
           </Button>
-        </div>
-      </div>
+        </CardFooter>
+      </Card>
 
-      <div className="h-[600px] border rounded-none bg-card text-card-foreground shadow-sm overflow-hidden flex flex-col p-6 border-t-4 border-t-primary">
-        <h2 className="text-lg font-semibold uppercase tracking-wider mb-4">Agent Interface</h2>
-        <AssistantChat />
-      </div>
+      <Card className="flex h-[600px] flex-col overflow-hidden">
+        <CardHeader>
+          <CardTitle>Archive assistant</CardTitle>
+        </CardHeader>
+        <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+          <AssistantChat />
+        </CardContent>
+      </Card>
     </div>
   );
 }

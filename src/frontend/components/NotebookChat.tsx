@@ -1,19 +1,24 @@
-import type { UIMessage } from "ai";
-
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useAgent } from "agents/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ExternalLink, PanelLeftClose, PanelRightClose, Tag as TagIcon } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { ArticleChatState } from "../../backend/ai/agents/articleChat";
 
-/** An archived article shown in the sources panel. */
+import { Thread } from "./assistant-ui/thread";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Separator } from "./ui/separator";
+
 export interface NotebookArticle {
   id: number;
   url: string;
   createdAt: string;
 }
 
-/** A spawned artifact record returned by `/api/artifacts`. */
 interface SpawnedArtifact {
   id: string;
   type: "pwa" | "mindmap" | "summary-card";
@@ -27,48 +32,195 @@ interface NotebookChatProps {
   sessionId: string;
 }
 
-const SPAWN_LABELS: Record<SpawnedArtifact["type"], string> = {
+const ARTIFACT_LABELS: Record<SpawnedArtifact["type"], string> = {
   pwa: "📱 PWA",
   mindmap: "🗺 Mind Map",
   "summary-card": "📄 Summary",
 };
 
-/** Best-effort human label for an article URL. */
-function articleLabel(url: string): { title: string; host: string } {
+function articleHost(url: string): string {
   try {
-    const parsed = new URL(url);
-    const path = parsed.pathname.replace(/\/$/, "");
-    return {
-      title: path && path !== "" ? path.slice(1) || parsed.hostname : parsed.hostname,
-      host: parsed.hostname,
-    };
+    return new URL(url).hostname;
   } catch {
-    return { title: url, host: url };
+    return url;
   }
 }
 
-function messageText(message: UIMessage): string {
-  return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
+/* ── sources panel ────────────────────────────────────────────────────── */
+
+function SourcesPanel({
+  articles,
+  pinned,
+  togglePin,
+  setAll,
+  open,
+  onToggle,
+}: {
+  articles: NotebookArticle[];
+  pinned: Set<number>;
+  togglePin: (id: number) => void;
+  setAll: (ids: number[]) => void;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  if (!open) {
+    return (
+      <Card className="bg-card flex w-12 shrink-0 flex-col items-center justify-start py-3">
+        <Button variant="ghost" size="icon" onClick={onToggle} aria-label="Open sources">
+          <PanelLeftClose className="h-4 w-4 rotate-180" />
+        </Button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="flex w-72 shrink-0 flex-col overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
+        <CardTitle className="text-sm font-semibold">
+          Sources{" "}
+          <span className="text-muted-foreground font-normal">
+            {pinned.size}/{articles.length}
+          </span>
+        </CardTitle>
+        <Button variant="ghost" size="icon" onClick={onToggle} aria-label="Collapse sources">
+          <PanelLeftClose className="h-4 w-4" />
+        </Button>
+      </CardHeader>
+      <Separator />
+      <div className="flex items-center gap-2 px-4 py-2 text-xs">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 px-2"
+          onClick={() => setAll(articles.map((a) => a.id))}
+        >
+          All
+        </Button>
+        <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => setAll([])}>
+          None
+        </Button>
+      </div>
+      <Separator />
+      <CardContent className="flex-1 overflow-y-auto p-0">
+        {articles.length === 0 && (
+          <p className="text-muted-foreground px-4 py-6 text-center text-xs">
+            No articles archived yet.
+          </p>
+        )}
+        {articles.map((article) => (
+          <label
+            key={article.id}
+            className="hover:bg-muted/50 border-border/40 flex cursor-pointer items-start gap-2 border-b px-4 py-2.5"
+          >
+            <input
+              type="checkbox"
+              checked={pinned.has(article.id)}
+              onChange={() => togglePin(article.id)}
+              className="mt-0.5 shrink-0"
+            />
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-medium">{articleHost(article.url)}</span>
+              <span className="text-muted-foreground block truncate text-[10px]">
+                {article.url}
+              </span>
+            </span>
+          </label>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }
 
-/**
- * NotebookLM-style three-pane interface: article sources, an agent chat, and a
- * gallery of spawned artifacts. Backed by the ArticleChatAgent Durable Object.
- */
+/* ── artifacts panel ──────────────────────────────────────────────────── */
+
+function ArtifactsPanel({
+  artifacts,
+  onPreview,
+  open,
+  onToggle,
+}: {
+  artifacts: SpawnedArtifact[];
+  onPreview: (url: string) => void;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  if (!open) {
+    return (
+      <Card className="bg-card flex w-12 shrink-0 flex-col items-center justify-start py-3">
+        <Button variant="ghost" size="icon" onClick={onToggle} aria-label="Open artifacts">
+          <PanelRightClose className="h-4 w-4 rotate-180" />
+        </Button>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="flex w-72 shrink-0 flex-col overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
+        <CardTitle className="text-sm font-semibold">
+          Artifacts <span className="text-muted-foreground font-normal">{artifacts.length}</span>
+        </CardTitle>
+        <Button variant="ghost" size="icon" onClick={onToggle} aria-label="Collapse artifacts">
+          <PanelRightClose className="h-4 w-4" />
+        </Button>
+      </CardHeader>
+      <Separator />
+      <CardContent className="flex-1 overflow-y-auto p-0">
+        {artifacts.length === 0 && (
+          <p className="text-muted-foreground px-4 py-6 text-center text-xs">
+            Ask the agent to spawn a PWA or summary to see it here.
+          </p>
+        )}
+        {artifacts.map((artifact) => (
+          <div key={artifact.id} className="border-border/40 hover:bg-muted/50 border-b px-4 py-3">
+            <p className="truncate text-xs font-medium">{artifact.title}</p>
+            <p className="text-muted-foreground mb-2 text-[10px] capitalize">
+              {ARTIFACT_LABELS[artifact.type] ?? artifact.type}
+            </p>
+            {artifact.publicUrl && (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => onPreview(artifact.publicUrl!)}
+                >
+                  Preview
+                </Button>
+                <a
+                  href={artifact.publicUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
+                >
+                  Open <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── root ─────────────────────────────────────────────────────────────── */
+
 export function NotebookChat({ articles, sessionId }: NotebookChatProps) {
   const [pinned, setPinned] = useState<Set<number>>(new Set());
   const [artifacts, setArtifacts] = useState<SpawnedArtifact[]>([]);
   const [sourcesOpen, setSourcesOpen] = useState(true);
   const [artifactsOpen, setArtifactsOpen] = useState(true);
   const [preview, setPreview] = useState<string | null>(null);
-  const [input, setInput] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const agent = useAgent<ArticleChatState>({ agent: "ArticleChatAgent", name: sessionId });
-  const { messages, sendMessage, status } = useAgentChat({ agent });
-  const busy = status === "submitted" || status === "streaming";
+  const agent = useAgent<ArticleChatState>({
+    agent: "ArticleChatAgent",
+    name: sessionId,
+  });
+  const chat = useAgentChat({ agent });
+  const runtime = useAISDKRuntime(chat as Parameters<typeof useAISDKRuntime>[0]);
 
-  // Sync pinned sources into the agent's Durable Object state.
+  /** Sync pinned source IDs into the agent's DO state. */
   const syncSources = useCallback(
     (ids: Set<number>) => {
       agent.setState({
@@ -108,223 +260,75 @@ export function NotebookChat({ articles, sessionId }: NotebookChatProps) {
     void refreshArtifacts();
   }, [refreshArtifacts]);
 
-  // Refresh the gallery whenever a chat turn finishes (an artifact may exist).
   useEffect(() => {
-    if (status === "ready") void refreshArtifacts();
-  }, [status, refreshArtifacts]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages]);
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text || busy) return;
-    sendMessage({ text });
-    setInput("");
-  };
-
-  const quickSpawn = (type: SpawnedArtifact["type"]) => {
-    if (pinned.size === 0 || busy) return;
-    const label =
-      type === "mindmap" ? "mind map" : type === "summary-card" ? "summary card" : "reading PWA";
-    sendMessage({ text: `Please spawn a ${label} for the currently pinned articles.` });
-  };
+    if (chat.status === "ready") void refreshArtifacts();
+  }, [chat.status, refreshArtifacts]);
 
   return (
-    <div className="bg-background text-foreground flex h-screen overflow-hidden">
-      {/* Sources panel */}
-      <aside
-        className={`border-border flex flex-col border-r transition-all ${sourcesOpen ? "w-72" : "w-12"}`}
-      >
-        <div className="border-border flex items-center justify-between border-b px-3 py-3">
-          {sourcesOpen && (
-            <span className="text-xs font-semibold uppercase tracking-wider">
-              Sources ({pinned.size}/{articles.length})
-            </span>
-          )}
-          <button
-            onClick={() => setSourcesOpen((o) => !o)}
-            className="text-muted-foreground ml-auto hover:text-foreground"
-          >
-            {sourcesOpen ? "◀" : "▶"}
-          </button>
-        </div>
-        {sourcesOpen && (
-          <>
-            <div className="border-border flex gap-2 border-b px-3 py-2 text-xs">
-              <button onClick={() => setAll(articles.map((a) => a.id))} className="hover:underline">
-                All
-              </button>
-              <span className="text-muted-foreground">·</span>
-              <button onClick={() => setAll([])} className="hover:underline">
-                None
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {articles.length === 0 && (
-                <p className="text-muted-foreground px-3 py-6 text-center text-xs">
-                  No archived articles yet.
-                </p>
+    <AssistantRuntimeProvider runtime={runtime}>
+      <div className="bg-background text-foreground flex h-screen gap-2 overflow-hidden p-2">
+        <SourcesPanel
+          articles={articles}
+          pinned={pinned}
+          togglePin={togglePin}
+          setAll={setAll}
+          open={sourcesOpen}
+          onToggle={() => setSourcesOpen((o) => !o)}
+        />
+
+        <Card className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
+            <CardTitle className="text-sm font-semibold">Notebook chat</CardTitle>
+            <div className="flex items-center gap-1.5 text-xs">
+              {pinned.size > 0 ? (
+                <Badge variant="secondary" className="gap-1">
+                  <TagIcon className="h-3 w-3" />
+                  {pinned.size} pinned
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground">no sources pinned</span>
               )}
-              {articles.map((article) => {
-                const { title, host } = articleLabel(article.url);
-                return (
-                  <label
-                    key={article.id}
-                    className="border-border/50 hover:bg-muted flex cursor-pointer items-start gap-2 border-b px-3 py-2.5"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={pinned.has(article.id)}
-                      onChange={() => togglePin(article.id)}
-                      className="mt-0.5 shrink-0"
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate text-xs font-medium">{title}</span>
-                      <span className="text-muted-foreground block truncate text-[10px]">
-                        {host}
-                      </span>
-                    </span>
-                  </label>
-                );
-              })}
             </div>
-          </>
-        )}
-      </aside>
-
-      {/* Chat panel */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="border-border bg-muted/30 flex items-center gap-2 border-b px-4 py-2">
-          <span className="text-muted-foreground mr-1 text-xs">Spawn:</span>
-          {(["pwa", "mindmap", "summary-card"] as const).map((type) => (
-            <button
-              key={type}
-              onClick={() => quickSpawn(type)}
-              disabled={pinned.size === 0 || busy}
-              className="bg-muted hover:bg-muted/70 rounded-none px-2.5 py-1 text-xs disabled:opacity-30"
-            >
-              {SPAWN_LABELS[type]}
-            </button>
-          ))}
-          {pinned.size === 0 && (
-            <span className="text-muted-foreground ml-2 text-[10px]">← pin sources to enable</span>
-          )}
-        </div>
-
-        <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
-          {messages.length === 0 && (
-            <p className="text-muted-foreground text-xs uppercase tracking-wider">
-              Pin article sources, then ask the agent to explore or spawn artifacts.
-            </p>
-          )}
-          {messages.map((message) => (
-            <div key={message.id} className="space-y-1">
-              <p className="text-muted-foreground text-[10px] uppercase tracking-widest">
-                {message.role}
-              </p>
-              <p className="whitespace-pre-wrap text-sm">{messageText(message)}</p>
-            </div>
-          ))}
-          {status === "submitted" && <p className="text-muted-foreground text-xs">Thinking…</p>}
-        </div>
-
-        <form onSubmit={submit} className="border-border flex gap-2 border-t p-4">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about your sources…"
-            className="bg-background border-input flex-1 rounded-none border px-3 py-2 font-mono text-xs focus-visible:outline-none focus-visible:ring-1"
-          />
-          <button
-            type="submit"
-            disabled={busy}
-            className="bg-primary text-primary-foreground rounded-none px-4 py-2 text-xs font-medium uppercase tracking-widest disabled:opacity-30"
-          >
-            Send
-          </button>
-        </form>
-      </div>
-
-      {/* Artifacts panel */}
-      <aside
-        className={`border-border flex flex-col border-l transition-all ${artifactsOpen ? "w-72" : "w-12"}`}
-      >
-        <div className="border-border flex items-center justify-between border-b px-3 py-3">
-          <button
-            onClick={() => setArtifactsOpen((o) => !o)}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            {artifactsOpen ? "▶" : "◀"}
-          </button>
-          {artifactsOpen && (
-            <span className="ml-2 text-xs font-semibold uppercase tracking-wider">
-              Artifacts ({artifacts.length})
-            </span>
-          )}
-        </div>
-        {artifactsOpen && (
-          <div className="flex-1 overflow-y-auto">
-            {artifacts.length === 0 && (
-              <p className="text-muted-foreground px-4 py-6 text-center text-xs">
-                Spawn a PWA or mind map to see it here.
-              </p>
-            )}
-            {artifacts.map((artifact) => (
-              <div key={artifact.id} className="border-border/50 hover:bg-muted border-b px-3 py-3">
-                <p className="truncate text-xs font-medium">{artifact.title}</p>
-                <p className="text-muted-foreground text-[10px] capitalize">{artifact.type}</p>
-                {artifact.publicUrl && (
-                  <div className="mt-1 flex gap-2 text-[10px]">
-                    <button
-                      onClick={() => setPreview(artifact.publicUrl)}
-                      className="hover:underline"
-                    >
-                      Preview
-                    </button>
-                    <a
-                      href={artifact.publicUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:underline"
-                    >
-                      Open ↗
-                    </a>
-                  </div>
-                )}
-              </div>
-            ))}
+          </CardHeader>
+          <Separator />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <Thread />
           </div>
-        )}
-      </aside>
+        </Card>
 
-      {/* Preview modal */}
-      {preview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
-          onClick={() => setPreview(null)}
-        >
+        <ArtifactsPanel
+          artifacts={artifacts}
+          onPreview={setPreview}
+          open={artifactsOpen}
+          onToggle={() => setArtifactsOpen((o) => !o)}
+        />
+
+        {preview && (
           <div
-            className="h-full w-full max-w-5xl overflow-hidden bg-white"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8"
+            onClick={() => setPreview(null)}
           >
-            <div className="flex items-center justify-between bg-zinc-900 px-4 py-2">
-              <span className="truncate text-xs text-zinc-300">{preview}</span>
-              <button onClick={() => setPreview(null)} className="text-zinc-400 hover:text-white">
-                ✕
-              </button>
-            </div>
-            <iframe
-              src={preview}
-              title="Artifact preview"
-              className="h-[calc(100%-36px)] w-full"
-              sandbox="allow-scripts allow-same-origin"
-            />
+            <Card
+              className="flex h-full w-full max-w-5xl flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
+                <CardTitle className="truncate text-xs font-mono">{preview}</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setPreview(null)}>
+                  Close
+                </Button>
+              </CardHeader>
+              <Separator />
+              <iframe
+                src={preview}
+                title="Artifact preview"
+                className="flex-1 bg-white"
+                sandbox="allow-scripts allow-same-origin"
+              />
+            </Card>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </AssistantRuntimeProvider>
   );
 }
