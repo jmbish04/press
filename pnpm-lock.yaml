@@ -56,6 +56,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.2.4
         version: 4.2.4(vite@7.3.2(@types/node@24.12.4)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))
+      '@zumer/snapdom':
+        specifier: ^2.12.0
+        version: 2.12.0
       agents:
         specifier: ^0.13.0
         version: 0.13.0(@babel/core@7.29.0)(@babel/runtime@7.29.2)(@cloudflare/ai-chat@0.7.1)(@cloudflare/workers-types@file:tools/stub-workers-types)(ai@6.0.168(zod@3.25.76))(react@19.2.5)(rolldown@1.0.1)(vite@7.3.2(@types/node@24.12.4)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0))(zod@3.25.76)
@@ -80,6 +83,9 @@ importers:
       lucide-react:
         specifier: ^0.575.0
         version: 0.575.0(react@19.2.5)
+      mind-elixir:
+        specifier: ^5.12.1
+        version: 5.12.1
       platejs:
         specifier: ^53.0.0
         version: 53.0.3(@types/react@19.2.14)(immer@10.2.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(scheduler@0.27.0)(use-sync-external-store@1.6.0(react@19.2.5))
@@ -3374,6 +3380,9 @@ packages:
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
 
+  '@zumer/snapdom@2.12.0':
+    resolution: {integrity: sha512-TdLGu+1RkKI3JKfMFvn1gRPD/rl8hrAeN6aFjjd0w7S39nulbd94ChxSlfH7nSCm8kzuQkeWFxIsij4+Mk1RDg==}
+
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
@@ -4993,6 +5002,9 @@ packages:
   mimic-function@5.0.1:
     resolution: {integrity: sha512-VP79XUPxV2CigYP3jWwAUFSku2aKqBH7uTAapFWCBqutsbmDo96KY5o8uh6U+/YSIn5OxJnXp73beVkpqMIGhA==}
     engines: {node: '>=18'}
+
+  mind-elixir@5.12.1:
+    resolution: {integrity: sha512-87oGi4Y6O+EbpE5dY97OBm9UmChCfz59o5LdTmry9IrEWXE5Dfcuf7p0MHhGfQE3yBcZ4+Sad9bwB3totQOSoQ==}
 
   miniflare@4.20260114.0:
     resolution: {integrity: sha512-QwHT7S6XqGdQxIvql1uirH/7/i3zDEt0B/YBXTYzMfJtVCR4+ue3KPkU+Bl0zMxvpgkvjh9+eCHhJbKEqya70A==}
@@ -9164,6 +9176,8 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@zumer/snapdom@2.12.0': {}
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
@@ -11057,6 +11071,8 @@ snapshots:
   mimic-fn@2.1.0: {}
 
   mimic-function@5.0.1: {}
+
+  mind-elixir@5.12.1: {}
 
   miniflare@4.20260114.0:
     dependencies:

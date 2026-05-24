@@ -11,6 +11,7 @@ import { Thread } from "./assistant-ui/thread";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { MindMap, MindMapControls } from "./ui/mindmap";
 import { Separator } from "./ui/separator";
 
 export interface NotebookArticle {
@@ -140,7 +141,7 @@ function ArtifactsPanel({
   onToggle,
 }: {
   artifacts: SpawnedArtifact[];
-  onPreview: (url: string) => void;
+  onPreview: (artifact: SpawnedArtifact) => void;
   open: boolean;
   onToggle: () => void;
 }) {
@@ -183,7 +184,7 @@ function ArtifactsPanel({
                   variant="outline"
                   size="sm"
                   className="h-6 px-2 text-xs"
-                  onClick={() => onPreview(artifact.publicUrl!)}
+                  onClick={() => onPreview(artifact)}
                 >
                   Preview
                 </Button>
@@ -204,6 +205,85 @@ function ArtifactsPanel({
   );
 }
 
+/* ── preview modal ────────────────────────────────────────────────────── */
+
+import type { MindElixirData } from "mind-elixir";
+
+type MindMapData = MindElixirData;
+
+function ArtifactPreviewModal({
+  artifact,
+  onClose,
+}: {
+  artifact: SpawnedArtifact;
+  onClose: () => void;
+}) {
+  const [mindMapData, setMindMapData] = useState<MindMapData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (artifact.type !== "mindmap" || !artifact.publicUrl) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(artifact.publicUrl!);
+        if (!res.ok) throw new Error(`Failed to load mind map (${res.status})`);
+        const data = (await res.json()) as MindMapData;
+        if (!cancelled) setMindMapData(data);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [artifact]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8"
+      onClick={onClose}
+    >
+      <Card
+        className="flex h-full w-full max-w-5xl flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
+          <CardTitle className="truncate text-sm font-semibold">{artifact.title}</CardTitle>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </CardHeader>
+        <Separator />
+        {artifact.type === "mindmap" ? (
+          <div className="relative flex-1">
+            {error && <p className="text-destructive p-6 text-center text-sm">{error}</p>}
+            {!error && !mindMapData && (
+              <p className="text-muted-foreground p-6 text-center text-sm">Loading mind map…</p>
+            )}
+            {mindMapData && (
+              <MindMap data={mindMapData}>
+                <MindMapControls />
+              </MindMap>
+            )}
+          </div>
+        ) : artifact.publicUrl ? (
+          <iframe
+            src={artifact.publicUrl}
+            title={artifact.title}
+            className="flex-1 bg-white"
+            sandbox="allow-scripts allow-same-origin"
+          />
+        ) : (
+          <p className="text-muted-foreground p-6 text-center text-sm">
+            Artifact has no public URL.
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 /* ── root ─────────────────────────────────────────────────────────────── */
 
 export function NotebookChat({ articles, sessionId }: NotebookChatProps) {
@@ -211,7 +291,7 @@ export function NotebookChat({ articles, sessionId }: NotebookChatProps) {
   const [artifacts, setArtifacts] = useState<SpawnedArtifact[]>([]);
   const [sourcesOpen, setSourcesOpen] = useState(true);
   const [artifactsOpen, setArtifactsOpen] = useState(true);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [preview, setPreview] = useState<SpawnedArtifact | null>(null);
 
   const agent = useAgent<ArticleChatState>({
     agent: "ArticleChatAgent",
@@ -303,31 +383,7 @@ export function NotebookChat({ articles, sessionId }: NotebookChatProps) {
           onToggle={() => setArtifactsOpen((o) => !o)}
         />
 
-        {preview && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-8"
-            onClick={() => setPreview(null)}
-          >
-            <Card
-              className="flex h-full w-full max-w-5xl flex-col overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 py-3">
-                <CardTitle className="truncate text-xs font-mono">{preview}</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setPreview(null)}>
-                  Close
-                </Button>
-              </CardHeader>
-              <Separator />
-              <iframe
-                src={preview}
-                title="Artifact preview"
-                className="flex-1 bg-white"
-                sandbox="allow-scripts allow-same-origin"
-              />
-            </Card>
-          </div>
-        )}
+        {preview && <ArtifactPreviewModal artifact={preview} onClose={() => setPreview(null)} />}
       </div>
     </AssistantRuntimeProvider>
   );

@@ -1,5 +1,9 @@
 /**
  * @fileoverview Generates an artifact, deploys it to R2, and records it in D1.
+ *
+ * - `pwa` / `summary-card` artifacts are single-file HTML documents.
+ * - `mindmap` artifacts are mind-elixir JSON trees rendered in-app by the
+ *   mindmapcn `<MindMap>` component (no standalone HTML).
  */
 
 import type { ChatToolContext, SpawnArtifactInput, SpawnArtifactResult } from "../types";
@@ -7,13 +11,8 @@ import type { ChatToolContext, SpawnArtifactInput, SpawnArtifactResult } from ".
 import { getDb } from "../../../../db";
 import { spawnedArtifacts } from "../../../../db/schemas";
 import { formatDigests, getArticleDigests } from "../../../rag/articleRag";
-import { deployPWAToR2, generatePWACode } from "../../pwaSpawner";
+import { deployPWAToR2, generateMindMapData, generatePWACode } from "../../pwaSpawner";
 
-/**
- * Resolves the target articles, generates the artifact HTML, deploys it, and
- * persists a `spawned_artifacts` row. Returns an error message string on
- * recoverable failures so the model can relay it to the user.
- */
 export async function spawnArtifact(
   ctx: ChatToolContext,
   input: SpawnArtifactInput,
@@ -29,8 +28,24 @@ export async function spawnArtifact(
   }
 
   const content = [formatDigests(digests), input.brief].filter(Boolean).join("\n\n");
-  const html = await generatePWACode(ctx.env, content, input.title, input.type);
-  const { r2Key, publicUrl } = await deployPWAToR2(ctx.env, html, input.title, input.type);
+
+  let r2Key: string;
+  let publicUrl: string;
+
+  if (input.type === "mindmap") {
+    const data = await generateMindMapData(ctx.env, content, input.title);
+    const deployed = await deployPWAToR2(ctx.env, JSON.stringify(data), input.title, "mindmap", {
+      contentType: "application/json; charset=utf-8",
+      fileName: "data.json",
+    });
+    r2Key = deployed.r2Key;
+    publicUrl = deployed.publicUrl;
+  } else {
+    const html = await generatePWACode(ctx.env, content, input.title, input.type);
+    const deployed = await deployPWAToR2(ctx.env, html, input.title, input.type);
+    r2Key = deployed.r2Key;
+    publicUrl = deployed.publicUrl;
+  }
 
   const id = crypto.randomUUID();
   await getDb(ctx.env)

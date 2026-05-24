@@ -6,5 +6,6 @@
  */
 
 export { generatePWACode } from "./methods/generatePWACode";
+export { generateMindMapData } from "./methods/generateMindMapData";
 export { deployPWAToR2 } from "./methods/deployToR2";
-export type { ArtifactType, DeployResult } from "./types";
+export type { ArtifactType, DeployResult, MindMapData, MindMapNode } from "./types";

@@ -12,3 +12,15 @@ export interface DeployResult {
   /** Worker-served URL for opening the artifact. */
   publicUrl: string;
 }
+
+/** A single node in a mind-map tree, compatible with mind-elixir's NodeObj. */
+export interface MindMapNode {
+  id: string;
+  topic: string;
+  children?: MindMapNode[];
+}
+
+/** mind-elixir-compatible mind-map data envelope. */
+export interface MindMapData {
+  nodeData: MindMapNode;
+}
