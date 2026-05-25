@@ -1,0 +1,43 @@
+---
+import { desc } from "drizzle-orm";
+
+import "../styles/global.css";
+import NavHeader from "../components/NavHeader.astro";
+import { NotebookChat, type NotebookArticle } from "../components/NotebookChat";
+import { getDb } from "../../backend/db";
+import { articles } from "../../backend/db/schemas";
+
+const env: Env = Astro.locals.runtime.env;
+
+let articleList: NotebookArticle[] = [];
+try {
+  const rows = await getDb(env)
+    .select()
+    .from(articles)
+    .orderBy(desc(articles.createdAt))
+    .limit(200);
+  articleList = rows.map((row) => ({
+    id: row.id,
+    url: row.url,
+    createdAt: row.createdAt ? row.createdAt.toISOString() : "",
+  }));
+} catch (err) {
+  console.error("notebook: failed to load articles", err);
+}
+
+const sessionId = Astro.url.searchParams.get("session") ?? "default";
+---
+
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Notebook · The Archive</title>
+  </head>
+  <body class="bg-background text-foreground flex h-screen flex-col antialiased">
+    <NavHeader current="notebook" />
+    <div class="min-h-0 flex-1">
+      <NotebookChat client:only="react" articles={articleList} sessionId={sessionId} />
+    </div>
+  </body>
+</html>

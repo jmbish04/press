@@ -2,23 +2,26 @@
  * @fileoverview AI API routes for Workers AI integration via AI Gateway
  */
 
-import { Hono } from 'hono';
-import { zValidator } from '@hono/zod-validator';
-import { z } from 'zod';
-import { authMiddleware } from '../middleware/auth';
-import type { Bindings, Variables } from '../index';
+import { zValidator } from "@hono/zod-validator";
+import { Hono } from "hono";
+import { z } from "zod";
 
-const aiRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+import type { Variables } from "../index";
+
+import { AI_GATEWAY_OPTIONS } from "../../ai/gateway";
+import { authMiddleware } from "../middleware/auth";
+
+const aiRouter = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // Apply auth middleware
-aiRouter.use('*', authMiddleware);
+aiRouter.use("*", authMiddleware);
 
 const chatSchema = z.object({
   messages: z.array(
     z.object({
-      role: z.enum(['user', 'assistant', 'system']),
+      role: z.enum(["user", "assistant", "system"]),
       content: z.string(),
-    })
+    }),
   ),
   model: z.string().optional(),
 });
@@ -33,73 +36,89 @@ const textToSpeechSchema = z.object({
 });
 
 // POST /api/ai/chat
-aiRouter.post('/chat', zValidator('json', chatSchema), async (c) => {
-  const { messages, model = '@cf/meta/llama-3.2-3b-instruct' } = c.req.valid('json');
+aiRouter.post("/chat", zValidator("json", chatSchema), async (c) => {
+  const { messages, model = "@cf/meta/llama-3.2-3b-instruct" } = c.req.valid("json");
 
   try {
-    const response = await c.env.AI.run(model, {
-      messages,
-      stream: false,
-    });
+    const response = await c.env.AI.run(
+      model,
+      {
+        messages,
+        stream: false,
+      },
+      AI_GATEWAY_OPTIONS,
+    );
 
     return c.json(response);
   } catch (error) {
-    console.error('AI chat error:', error);
-    return c.json({ error: 'AI chat failed' }, 500);
+    console.error("AI chat error:", error);
+    return c.json({ error: "AI chat failed" }, 500);
   }
 });
 
 // POST /api/ai/chat/stream
-aiRouter.post('/chat/stream', zValidator('json', chatSchema), async (c) => {
-  const { messages, model = '@cf/meta/llama-3.2-3b-instruct' } = c.req.valid('json');
+aiRouter.post("/chat/stream", zValidator("json", chatSchema), async (c) => {
+  const { messages, model = "@cf/meta/llama-3.2-3b-instruct" } = c.req.valid("json");
 
   try {
-    const stream = await c.env.AI.run(model, {
-      messages,
-      stream: true,
-    });
+    const stream = await c.env.AI.run(
+      model,
+      {
+        messages,
+        stream: true,
+      },
+      AI_GATEWAY_OPTIONS,
+    );
 
-    return new Response(stream, {
+    return new Response(stream as unknown as ReadableStream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       },
     });
   } catch (error) {
-    console.error('AI chat stream error:', error);
-    return c.json({ error: 'AI chat stream failed' }, 500);
+    console.error("AI chat stream error:", error);
+    return c.json({ error: "AI chat stream failed" }, 500);
   }
 });
 
 // POST /api/ai/speech-to-text
-aiRouter.post('/speech-to-text', zValidator('json', speechToTextSchema), async (c) => {
-  const { audio } = c.req.valid('json');
+aiRouter.post("/speech-to-text", zValidator("json", speechToTextSchema), async (c) => {
+  const { audio } = c.req.valid("json");
 
   try {
     // Decode base64 audio
     const audioBuffer = Uint8Array.from(atob(audio), (c) => c.charCodeAt(0));
 
-    const response = await c.env.AI.run('@cf/openai/whisper', {
-      audio: Array.from(audioBuffer),
-    });
+    const response = await c.env.AI.run(
+      "@cf/openai/whisper",
+      {
+        audio: Array.from(audioBuffer),
+      },
+      AI_GATEWAY_OPTIONS,
+    );
 
     return c.json(response);
   } catch (error) {
-    console.error('Speech-to-text error:', error);
-    return c.json({ error: 'Speech-to-text failed' }, 500);
+    console.error("Speech-to-text error:", error);
+    return c.json({ error: "Speech-to-text failed" }, 500);
   }
 });
 
 // POST /api/ai/text-to-speech
-aiRouter.post('/text-to-speech', zValidator('json', textToSpeechSchema), async (c) => {
-  const { text, voice = 'alloy' } = c.req.valid('json');
+aiRouter.post("/text-to-speech", zValidator("json", textToSpeechSchema), async (c) => {
+  const { text, voice = "alloy" } = c.req.valid("json");
 
   try {
-    const response = await c.env.AI.run('@cf/deepgram/aura-1', {
-      text,
-      voice,
-    });
+    const response = await c.env.AI.run(
+      "@cf/deepgram/aura-1",
+      {
+        text,
+        voice,
+      },
+      AI_GATEWAY_OPTIONS,
+    );
 
     // Return audio as base64
     if (response instanceof ReadableStream) {
@@ -126,25 +145,33 @@ aiRouter.post('/text-to-speech', zValidator('json', textToSpeechSchema), async (
 
     return c.json(response);
   } catch (error) {
-    console.error('Text-to-speech error:', error);
-    return c.json({ error: 'Text-to-speech failed' }, 500);
+    console.error("Text-to-speech error:", error);
+    return c.json({ error: "Text-to-speech failed" }, 500);
   }
 });
 
 // POST /api/ai/embeddings
-aiRouter.post('/embeddings', zValidator('json', z.object({ text: z.string().min(1) })), async (c) => {
-  const { text } = await c.req.json();
+aiRouter.post(
+  "/embeddings",
+  zValidator("json", z.object({ text: z.string().min(1) })),
+  async (c) => {
+    const { text } = await c.req.json();
 
-  try {
-    const response = await c.env.AI.run('@cf/baai/bge-base-en-v1.5', {
-      text,
-    });
+    try {
+      const response = await c.env.AI.run(
+        "@cf/baai/bge-base-en-v1.5",
+        {
+          text,
+        },
+        AI_GATEWAY_OPTIONS,
+      );
 
-    return c.json(response);
-  } catch (error) {
-    console.error('Embeddings error:', error);
-    return c.json({ error: 'Embeddings generation failed' }, 500);
-  }
-});
+      return c.json(response);
+    } catch (error) {
+      console.error("Embeddings error:", error);
+      return c.json({ error: "Embeddings generation failed" }, 500);
+    }
+  },
+);
 
 export { aiRouter };

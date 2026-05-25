@@ -21,6 +21,9 @@ export default defineConfig({
   }),
   integrations: [react()],
   vite: {
+    ssr: {
+      external: ["node:fs/promises", "node:path", "node:url", "node:crypto"],
+    },
     plugins: [tailwindcss()],
   },
 });
