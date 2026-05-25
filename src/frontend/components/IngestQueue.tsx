@@ -28,13 +28,22 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card"
 import { Separator } from "./ui/separator";
 import { Textarea } from "./ui/textarea";
 
-/* ── URL parsing (mirrors backend extractUrls) ────────────────────────── */
+/* ── URL parsing (robust extraction with whitespace/newline handling) ──── */
 
 const URL_PATTERN = /https?:\/\/[^\s<>"'`\]})]+/gi;
 const TRAILING_JUNK = /[.,;:!?)\]}'"]+$/;
 
+/**
+ * Extracts URLs from free-form text with robust parsing:
+ * - Splits on whitespace and newlines to isolate tokens
+ * - Applies regex matching for http(s) URLs
+ * - Trims trailing punctuation
+ * - Normalizes and deduplicates via URL constructor
+ */
 function extractUrls(text: string): string[] {
   const seen = new Set<string>();
+
+  // First, try regex extraction (primary method)
   for (const raw of text.match(URL_PATTERN) ?? []) {
     const cleaned = raw.replace(TRAILING_JUNK, "").trim();
     if (!cleaned) continue;
@@ -44,6 +53,23 @@ function extractUrls(text: string): string[] {
       // ignore malformed URLs
     }
   }
+
+  // Additionally, split by whitespace/newlines and check each token
+  // This handles cases where URLs might be on separate lines without surrounding text
+  const tokens = text.split(/[\s\n\r]+/).filter(Boolean);
+  for (const token of tokens) {
+    const cleaned = token.replace(TRAILING_JUNK, "").trim();
+    if (!cleaned || seen.has(cleaned)) continue;
+    // Only process if it looks like a URL
+    if (/^https?:\/\//i.test(cleaned)) {
+      try {
+        seen.add(new URL(cleaned).toString());
+      } catch {
+        // ignore malformed URLs
+      }
+    }
+  }
+
   return [...seen];
 }
 
@@ -70,7 +96,7 @@ function groupByDomain(urls: string[]): DomainGroup[] {
     .sort((a, b) => a.domain.localeCompare(b.domain));
 }
 
-/* ── per-URL status badge ────────────────────────────────────────────── */
+/* ── per-URL status badge (emerald accent for success) ───────────────── */
 
 const STATUS_LABELS: Record<IngestItem["status"], string> = {
   queued: "Queued",
@@ -97,15 +123,19 @@ function StatusBadge({ status }: { status: IngestItem["status"] }) {
         : status === "failed"
           ? AlertCircle
           : null;
+
+  // Emerald accent for archived status
+  const accentClass = status === "archived" ? "border-emerald-500 text-emerald-500" : "";
+
   return (
-    <Badge variant={variant} className="gap-1">
+    <Badge variant={variant} className={cn("gap-1 rounded-none text-[10px] font-mono", accentClass)}>
       {Icon && <Icon className={cn("size-3", status === "processing" && "animate-spin")} />}
       {STATUS_LABELS[status]}
     </Badge>
   );
 }
 
-/* ── progress bar (green = success, red = failed) ─────────────────────── */
+/* ── progress bar (emerald = success, red = failed, monolith aesthetic) ─── */
 
 function ProgressBar({ items }: { items: IngestItem[] }) {
   const total = items.length;
@@ -125,7 +155,7 @@ function ProgressBar({ items }: { items: IngestItem[] }) {
 
   return (
     <div className="space-y-1.5">
-      <div className="text-muted-foreground flex justify-between text-xs">
+      <div className="text-zinc-400 flex justify-between font-mono text-[10px] tracking-tight">
         <span>
           {counts.done + counts.failed} of {total} processed
         </span>
@@ -133,7 +163,7 @@ function ProgressBar({ items }: { items: IngestItem[] }) {
           {counts.done} done · {counts.failed} failed
         </span>
       </div>
-      <div className="bg-secondary relative h-2 w-full overflow-hidden rounded-full">
+      <div className="bg-zinc-900 relative h-1.5 w-full overflow-hidden rounded-none">
         <div
           className="absolute inset-y-0 left-0 bg-emerald-500 transition-[width]"
           style={{ width: `${pct(counts.done)}%` }}
@@ -165,20 +195,20 @@ function DomainGroupBlock({
   const [open, setOpen] = useState(true);
 
   return (
-    <div className="border-border rounded-md border">
-      <div className="bg-muted/30 flex items-center justify-between gap-2 px-3 py-2">
+    <div className="border-zinc-900 rounded-none border bg-zinc-950">
+      <div className="bg-zinc-900/30 flex items-center justify-between gap-2 px-3 py-2">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="hover:text-foreground flex min-w-0 items-center gap-2 text-left"
+          className="hover:text-zinc-50 flex min-w-0 items-center gap-2 text-left"
         >
           {open ? (
-            <ChevronDown className="text-muted-foreground size-4 shrink-0" />
+            <ChevronDown className="text-zinc-500 size-4 shrink-0" />
           ) : (
-            <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+            <ChevronRight className="text-zinc-500 size-4 shrink-0" />
           )}
-          <span className="truncate text-sm font-medium">{group.domain}</span>
-          <Badge variant="outline" className="ml-1">
+          <span className="text-[11px] truncate font-mono font-medium tracking-tight">{group.domain}</span>
+          <Badge variant="outline" className="ml-1 rounded-none border-zinc-800 text-[10px]">
             {group.urls.length}
           </Badge>
         </button>
@@ -188,25 +218,26 @@ function DomainGroupBlock({
             size="sm"
             onClick={() => onRemoveGroup(group)}
             aria-label={`Delete all ${group.domain} links`}
+            className="hover:bg-zinc-800"
           >
             <Trash2 className="size-3.5" />
           </Button>
         )}
       </div>
       {open && (
-        <ul className="divide-border divide-y">
+        <ul className="divide-zinc-900 divide-y">
           {group.urls.map((url) => {
             const item = itemsByUrl?.get(url);
             return (
               <li key={url} className="flex items-center justify-between gap-3 px-3 py-2">
-                <span className="text-muted-foreground min-w-0 truncate font-mono text-xs">
+                <span className="text-zinc-400 min-w-0 truncate font-mono text-[11px] tracking-tight">
                   {url}
                 </span>
                 <div className="flex shrink-0 items-center gap-2">
                   {item && <StatusBadge status={item.status} />}
                   {item?.error && (
                     <span
-                      className="text-destructive max-w-[200px] truncate text-xs"
+                      className="text-destructive max-w-[200px] truncate font-mono text-[10px]"
                       title={item.error}
                     >
                       {item.error}
@@ -218,6 +249,7 @@ function DomainGroupBlock({
                       size="sm"
                       onClick={() => onRemoveUrl(url)}
                       aria-label="Delete link"
+                      className="hover:bg-zinc-800"
                     >
                       <Trash2 className="size-3.5" />
                     </Button>
@@ -252,21 +284,64 @@ export function IngestQueue() {
    * fragment and drops the rest. Reading `clipboardData` ourselves bypasses
    * the race — we also accept `text/uri-list` for multi-link clipboards
    * (e.g. the iOS share-sheet "Copy" of several Safari tabs).
+   *
+   * Enhanced with Async Clipboard API support to handle iOS multi-item clipboard
+   * arrays natively via navigator.clipboard.read().
    */
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const dt = e.clipboardData;
-    const text = dt.getData("text/plain") || dt.getData("text/uri-list") || dt.getData("text");
-    if (!text) return;
-
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault();
+
     const target = e.currentTarget;
     const start = target.selectionStart ?? paste.length;
     const end = target.selectionEnd ?? paste.length;
-    const next = paste.slice(0, start) + text + paste.slice(end);
+
+    let collectedText = "";
+
+    // Try modern Async Clipboard API first (iOS multi-item support)
+    if (navigator.clipboard && navigator.clipboard.read) {
+      try {
+        const clipboardItems = await navigator.clipboard.read();
+        const textFragments: string[] = [];
+
+        for (const item of clipboardItems) {
+          // Check for text/plain in each ClipboardItem
+          if (item.types.includes("text/plain")) {
+            const blob = await item.getType("text/plain");
+            const text = await blob.text();
+            if (text.trim()) textFragments.push(text.trim());
+          }
+          // Also check for text/uri-list (Safari multi-tab copy)
+          else if (item.types.includes("text/uri-list")) {
+            const blob = await item.getType("text/uri-list");
+            const text = await blob.text();
+            if (text.trim()) textFragments.push(text.trim());
+          }
+        }
+
+        if (textFragments.length > 0) {
+          // Join multi-item clipboard with newlines
+          collectedText = textFragments.join("\n");
+        }
+      } catch (err) {
+        // Fall through to legacy clipboardData API
+        console.warn("Async Clipboard API failed, falling back to clipboardData", err);
+      }
+    }
+
+    // Fallback: legacy clipboardData API
+    if (!collectedText) {
+      const dt = e.clipboardData;
+      collectedText =
+        dt.getData("text/plain") || dt.getData("text/uri-list") || dt.getData("text") || "";
+    }
+
+    if (!collectedText) return;
+
+    const next = paste.slice(0, start) + collectedText + paste.slice(end);
     setPaste(next);
 
     // Restore the caret to just after the pasted block on the next frame.
-    const caret = start + text.length;
+    const caret = start + collectedText.length;
     requestAnimationFrame(() => {
       target.setSelectionRange(caret, caret);
     });
@@ -388,11 +463,11 @@ export function IngestQueue() {
         <div className="space-y-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle>
+              <CardTitle className="font-mono text-sm tracking-tight">
                 Review queue{" "}
-                <span className="text-muted-foreground font-normal">{urls.length} link(s)</span>
+                <span className="text-zinc-400 font-normal">{urls.length} link(s)</span>
               </CardTitle>
-              <Button variant="ghost" size="sm" onClick={askResetPaste}>
+              <Button variant="ghost" size="sm" onClick={askResetPaste} className="rounded-none">
                 Start over
               </Button>
             </CardHeader>
@@ -407,8 +482,12 @@ export function IngestQueue() {
               ))}
             </CardContent>
             <CardFooter className="justify-end">
-              <Button onClick={submitForProcessing} disabled={submitting}>
-                {submitting ? "Submitting…" : `Process ${urls.length} link(s)`}
+              <Button
+                onClick={submitForProcessing}
+                disabled={submitting}
+                className="rounded-none bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+              >
+                {submitting ? "Submitting…" : `Confirm & archive ${urls.length} article${urls.length === 1 ? "" : "s"}`}
               </Button>
             </CardFooter>
           </Card>
@@ -424,24 +503,39 @@ export function IngestQueue() {
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Paste article URLs</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Paste article URLs
+            <Badge variant="outline" className="rounded-none border-zinc-800 text-[10px] font-mono font-normal">
+              Multi-item clipboard supported
+            </Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea
             value={paste}
             onChange={(e) => setPaste(e.target.value)}
             onPaste={handlePaste}
-            placeholder={`Paste anything — a share-sheet dump, a notes export, an email…
-URLs are auto-extracted, deduplicated, and grouped by domain on the next step.`}
-            className="min-h-[200px] font-mono text-xs"
+            placeholder={`Paste anything — iOS share-sheet dump, notes export, email, or plain URLs…
+Multi-item clipboard arrays are automatically detected and parsed.
+URLs are extracted, deduplicated, and grouped by domain on the next step.`}
+            className="min-h-[200px] rounded-none border-zinc-800 bg-zinc-950 font-mono text-[11px] tracking-tight placeholder:text-zinc-600"
           />
         </CardContent>
         <CardFooter className="justify-end gap-2">
-          <Button variant="ghost" onClick={() => setPaste("")} disabled={paste.length === 0}>
+          <Button
+            variant="ghost"
+            onClick={() => setPaste("")}
+            disabled={paste.length === 0}
+            className="rounded-none"
+          >
             Clear
           </Button>
-          <Button onClick={parsePaste} disabled={paste.trim().length === 0}>
-            Parse links
+          <Button
+            onClick={parsePaste}
+            disabled={paste.trim().length === 0}
+            className="rounded-none bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
+          >
+            Parse & review links
           </Button>
         </CardFooter>
       </Card>
