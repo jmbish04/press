@@ -3,12 +3,12 @@
 import "mind-elixir/style.css";
 import { snapdom, type SnapdomOptions } from "@zumer/snapdom";
 import { Minus, Plus, Download, Loader2, Maximize, ScanSearch } from "lucide-react";
-import {
-  type MindElixirInstance,
-  type MindElixirData,
-  type NodeObj,
-  type Options,
-  type Theme as MindElixirTheme,
+import type {
+  MindElixirInstance,
+  MindElixirData,
+  NodeObj,
+  Options,
+  Theme as MindElixirTheme,
 } from "mind-elixir";
 import {
   createContext,
