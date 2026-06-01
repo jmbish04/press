@@ -1,3 +1,4 @@
 {
-  "tailwindCSS.classFunctions": ["cva", "cn"]
+  "tailwindCSS.classFunctions": ["cva", "cn"],
+  "css.lint.unknownAtRules": "ignore"
 }
