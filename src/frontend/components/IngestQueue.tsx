@@ -1,10 +1,12 @@
 import { useAgent } from "agents/react";
+import * as clipboard from "clipboard-polyfill";
 import {
   AlertCircle,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Loader2,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -25,7 +27,6 @@ import {
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
-import { Separator } from "./ui/separator";
 import { Textarea } from "./ui/textarea";
 
 /* ── URL parsing (mirrors backend extractUrls) ────────────────────────── */
@@ -245,6 +246,7 @@ export function IngestQueue() {
   const [urls, setUrls] = useState<string[]>([]);
   const [confirm, setConfirm] = useState<PendingDelete | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [smartIngesting, setSmartIngesting] = useState(false);
 
   /**
    * iOS Safari can fire `onChange` on a controlled textarea with only a
@@ -291,6 +293,84 @@ export function IngestQueue() {
   const parsePaste = () => {
     const extracted = extractUrls(paste);
     setUrls(extracted);
+  };
+
+  const handleSmartIngest = async () => {
+    if (smartIngesting) return;
+
+    let clipboardItems: clipboard.ClipboardItems | null = null;
+    let fragments: string[] = [];
+
+    try {
+      let readPromise: Promise<clipboard.ClipboardItems> | null = null;
+      try {
+        // Call `read()` synchronously inside the user gesture handler to avoid
+        // iOS Safari losing the gesture token before the async clipboard read.
+        readPromise = clipboard.read();
+      } catch {
+        readPromise = null;
+      }
+
+      setSmartIngesting(true);
+
+      if (readPromise) {
+        try {
+          clipboardItems = await readPromise;
+        } catch {
+          clipboardItems = null;
+        }
+      }
+
+      if (clipboardItems && clipboardItems.length > 0) {
+        for (const item of clipboardItems) {
+          const plain =
+            item.types.includes("text/plain")
+              ? "text/plain"
+              : item.types.includes("text/uri-list")
+                ? "text/uri-list"
+                : null;
+          if (!plain) continue;
+
+          try {
+            const blob = await item.getType(plain);
+            const text = await blob.text();
+            if (text.trim()) fragments.push(text);
+          } catch {
+            // ignore unreadable clipboard items
+          }
+        }
+      }
+
+      // If `read()` didn't yield multiple discrete items, try `readText()` which
+      // sometimes has a better fallback path across browsers.
+      if (fragments.length === 0 || (clipboardItems?.length ?? 0) <= 1) {
+        try {
+          const text = await clipboard.readText();
+          if (text.trim()) fragments = [text];
+        } catch {
+          // ignore clipboard permission / support errors
+        }
+      }
+
+      if (fragments.length === 0 && paste.trim().length > 0) {
+        fragments = [paste];
+      }
+
+      const extracted = new Set<string>();
+      for (const chunk of fragments) {
+        for (const url of extractUrls(chunk)) extracted.add(url);
+      }
+
+      const nextUrls = [...extracted];
+      if (fragments.length > 0) {
+        setPaste(fragments.join("\n"));
+      }
+      if (nextUrls.length > 0) {
+        setUrls(nextUrls);
+      }
+    } finally {
+      setSmartIngesting(false);
+    }
   };
 
   const askDeleteUrl = (url: string) => {
@@ -437,6 +517,10 @@ URLs are auto-extracted, deduplicated, and grouped by domain on the next step.`}
           />
         </CardContent>
         <CardFooter className="justify-end gap-2">
+          <Button variant="outline" onClick={() => void handleSmartIngest()} disabled={smartIngesting}>
+            <Sparkles className="mr-2 size-4" />
+            Smart Ingest Clipboard
+          </Button>
           <Button variant="ghost" onClick={() => setPaste("")} disabled={paste.length === 0}>
             Clear
           </Button>
