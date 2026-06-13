@@ -4,6 +4,9 @@
  * - `pwa` / `summary-card` artifacts are single-file HTML documents.
  * - `mindmap` artifacts are mind-elixir JSON trees rendered in-app by the
  *   mindmapcn `<MindMap>` component (no standalone HTML).
+ *
+ * Each artifact stores full provenance: the prompt used, context provided,
+ * source article IDs, and version chain info for iteration.
  */
 
 import type { ChatToolContext, SpawnArtifactInput, SpawnArtifactResult } from "../types";
@@ -48,6 +51,24 @@ export async function spawnArtifact(
   }
 
   const id = crypto.randomUUID();
+
+  // Determine version info (for iteration chains).
+  let version = 1;
+  let parentArtifactId: string | null = null;
+  if (input.iterateArtifactId) {
+    const db = getDb(ctx.env);
+    const [parent] = await db
+      .select({ version: spawnedArtifacts.version })
+      .from(spawnedArtifacts)
+      .where(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (await import("drizzle-orm")).eq(spawnedArtifacts.id, input.iterateArtifactId),
+      )
+      .limit(1);
+    version = (parent?.version ?? 1) + 1;
+    parentArtifactId = input.iterateArtifactId;
+  }
+
   await getDb(ctx.env)
     .insert(spawnedArtifacts)
     .values({
@@ -58,8 +79,14 @@ export async function spawnArtifact(
       r2Key,
       publicUrl,
       articleIds: JSON.stringify(ids),
+      prompt: input.brief ?? null,
+      context: content.slice(0, 2000),
+      sourceArticleIds: JSON.stringify(ids),
+      version,
+      parentArtifactId,
       createdAt: new Date(),
     });
 
   return { id, type: input.type, title: input.title, url: publicUrl };
 }
+

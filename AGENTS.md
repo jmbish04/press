@@ -64,6 +64,49 @@ Not a Durable Object — stateless methods used by `spawn_artifact`:
 - `generatePWACode` — `env.AI.run` generates a single-file HTML artifact.
 - `deployPWAToR2` — writes the HTML to the `SPAWNED_PWAS` R2 bucket.
 
+### `PressMcpAgent` (`agents/pressMcp`)
+
+Binding: `PRESS_MCP` (migration tag `v4-press-mcp`). A remote MCP server built
+with `McpAgent` from the Agents SDK. Served at `/mcp` with Streamable HTTP
+transport (SSE fallback). External AI agents connect via `mcp-remote@latest`
+or any MCP client that supports remote servers.
+
+Tools:
+
+- `submit_article` — ingest URLs via Browser Rendering + AI extraction pipeline.
+- `search_archive` — Vectorize RAG similarity search across the corpus.
+- `list_articles` — browse archived articles with metadata and tags.
+- `get_article` — full article detail by ID (content, properties, tags).
+
+Resources:
+
+- `mcp://press/stats` — archive statistics (total articles, last updated).
+
+MCP client config example:
+
+```json
+{
+  "mcpServers": {
+    "press": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote@latest", "https://<your-domain>/mcp"]
+    }
+  }
+}
+```
+
+## REST API
+
+The Hono OpenAPI application (`src/backend/api/index.ts`) serves:
+
+- **`GET /openapi.json`** — dynamically generated OpenAPI 3.1 spec.
+- **`GET /swagger`** — Swagger UI (reads `/openapi.json`).
+- **`GET /scalar`** — Scalar API reference (reads `/openapi.json`).
+- **`POST /api/ingest`** — legacy ingestion (API-key authenticated).
+- **`POST /api/articles/submit`** — full-featured article submission with OpenAPI
+  docs. Accepts `{ urls: string[] }` or `{ urlsString: string }`. API-key
+  authenticated via `WORKER_API_KEY` Secrets Store binding.
+
 ## RAG
 
 `src/backend/ai/rag/articleRag.ts` — Vectorize similarity search over the

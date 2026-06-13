@@ -1,8 +1,6 @@
 "use client";
 
 import "mind-elixir/style.css";
-import { snapdom, type SnapdomOptions } from "@zumer/snapdom";
-import { Minus, Plus, Download, Loader2, Maximize, ScanSearch } from "lucide-react";
 import type {
   MindElixirInstance,
   MindElixirData,
@@ -10,6 +8,9 @@ import type {
   Options,
   Theme as MindElixirTheme,
 } from "mind-elixir";
+
+import { snapdom, type SnapdomOptions } from "@zumer/snapdom";
+import { Minus, Plus, Download, Loader2, Maximize, ScanSearch } from "lucide-react";
 import {
   createContext,
   useContext,

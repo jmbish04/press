@@ -12,18 +12,28 @@ import { apiReference } from "@scalar/hono-api-reference";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
-import { extractUrls } from "../ai/ingest/extractUrls";
-import { ingestUrls } from "../ai/ingest/ingestUrls";
+import { extractUrlsWithRejections } from "../ai/ingest/extractUrls";
+import { getDb } from "../db";
+import { ingestionJobs } from "../db/schemas";
 import { apiKeyMiddleware } from "./middleware/apiKey";
+import { visitorTracker } from "./middleware/visitorTracker";
 import { aiRouter } from "./routes/ai";
+import { analyticsRouter } from "./routes/analytics";
 import { articlesRouter } from "./routes/articles";
 import { artifactAssetsRouter, artifactsRouter } from "./routes/artifacts";
 import { authRouter } from "./routes/auth";
+import { backfillRouter } from "./routes/backfill";
 import { dashboardRouter } from "./routes/dashboard";
 import { documentsRouter } from "./routes/documents";
+import { narrationRouter } from "./routes/narration";
 import { notificationsRouter } from "./routes/notifications";
+import { preferencesRouter } from "./routes/preferences";
+import { processingRouter } from "./routes/processing";
+import { submitRouter } from "./routes/submit";
+import { sourcesRouter } from "./routes/sources";
 import { tagsRouter } from "./routes/tags";
 import { threadsRouter } from "./routes/threads";
+import { viewsRouter } from "./routes/views";
 
 /** Hono context variables set by middleware. */
 export type Variables = {
@@ -40,6 +50,7 @@ const app = new OpenAPIHono<{ Bindings: Env; Variables: Variables }>();
 // Middleware
 app.use("*", cors());
 app.use("*", logger());
+app.use("*", visitorTracker());
 
 // Health check and standard endpoints
 app.get("/api/ping", (c) => c.json({ status: "ok", timestamp: Date.now() }));
@@ -74,7 +85,13 @@ app.get("/health", async (c) => {
 // OpenAPI generators
 app.doc("/openapi.json", {
   openapi: "3.1.0",
-  info: { version: "1.0.0", title: "News Archiver API" },
+  info: {
+    version: "1.0.0",
+    title: "Press Archive API",
+    description:
+      "REST API for the Press news archive. Submit articles for ingestion, browse the archive, " +
+      "search via RAG, and manage tags and sessions. An MCP server is also available at /mcp.",
+  },
 });
 app.get("/swagger", swaggerUI({ url: "/openapi.json" }));
 app.get("/scalar", apiReference({ spec: { url: "/openapi.json" } }));
@@ -86,6 +103,8 @@ app.use("/api/ingest", apiKeyMiddleware);
 const ingestRoute = createRoute({
   method: "post",
   path: "/api/ingest",
+  tags: ["Articles"],
+  summary: "Legacy ingestion endpoint (Workflow-backed)",
   request: {
     body: {
       content: { "application/json": { schema: z.object({ urlsString: z.string() }) } },
@@ -93,29 +112,45 @@ const ingestRoute = createRoute({
   },
   responses: {
     202: {
-      content: { "application/json": { schema: z.object({ status: z.string() }) } },
-      description: "Batch accepted for processing",
+      content: { "application/json": { schema: z.object({ status: z.string(), jobIds: z.array(z.string()).optional() }) } },
+      description: "Workflow instances created",
     },
   },
 });
 
-app.openapi(ingestRoute, (c) => {
+app.openapi(ingestRoute, async (c) => {
   const { urlsString } = c.req.valid("json");
-  const urls = extractUrls(urlsString);
+  const { accepted: urls, rejected } = extractUrlsWithRejections(urlsString);
 
   if (urls.length === 0) {
-    return c.json({ status: "No valid URLs found" }, 202);
+    const msg = rejected.length > 0
+      ? "All submitted URLs were rejected. Please submit the actual article URLs, not aggregator/redirector links."
+      : "No valid URLs found";
+    return c.json({ status: msg, ...(rejected.length > 0 ? { rejected } : {}) } as any, 202);
   }
 
-  // Process asynchronously so the HTTP response is not blocked.
-  c.executionCtx.waitUntil(
-    ingestUrls(c.env, urls).then(
-      () => {},
-      (err) => console.error("Ingestion batch failed", err),
-    ),
-  );
+  const db = getDb(c.env);
+  const jobIds: string[] = [];
 
-  return c.json({ status: `Processing ${urls.length} URL(s)` }, 202);
+  for (const url of urls) {
+    const jobId = crypto.randomUUID();
+    await db.insert(ingestionJobs).values({ id: jobId, url, state: "active", stage: 0 });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (c.env as any).ARTICLE_INGESTION.create({ id: jobId, params: { jobId, url } });
+      jobIds.push(jobId);
+    } catch (err) {
+      console.error(`Workflow creation failed for ${url}:`, err);
+    }
+  }
+
+  const response: Record<string, unknown> = { status: `Processing ${urls.length} URL(s)`, jobIds };
+  if (rejected.length > 0) {
+    response.rejected = rejected;
+    response.message = "Some URLs were rejected. Please resolve these to actual article URLs and resubmit.";
+  }
+
+  return c.json(response as any, 202);
 });
 
 // Mount routers
@@ -124,10 +159,19 @@ app.route("/api/dashboard", dashboardRouter);
 app.route("/api/threads", threadsRouter);
 app.route("/api/notifications", notificationsRouter);
 app.route("/api/ai", aiRouter);
+
 app.route("/api/documents", documentsRouter);
 app.route("/api/articles", articlesRouter);
+app.route("/api/articles", narrationRouter);
 app.route("/api/tags", tagsRouter);
+app.route("/api/articles/submit", submitRouter);
+app.route("/api/sources", sourcesRouter);
 app.route("/api/artifacts", artifactsRouter);
+app.route("/api/processing", processingRouter);
+app.route("/api/views", viewsRouter);
+app.route("/api/preferences", preferencesRouter);
+app.route("/api/admin/backfill", backfillRouter);
+app.route("/api/analytics", analyticsRouter);
 app.route("/artifacts", artifactAssetsRouter);
 
 export { app };

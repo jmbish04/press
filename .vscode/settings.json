@@ -1,4 +1,13 @@
 {
   "tailwindCSS.classFunctions": ["cva", "cn"],
-  "css.lint.unknownAtRules": "ignore"
+  "css.lint.unknownAtRules": "ignore",
+  "files.associations": {
+    "wrangler.jsonc": "jsonc"
+  },
+  "json.schemas": [
+    {
+      "fileMatch": ["wrangler.jsonc"],
+      "schema": {}
+    }
+  ]
 }

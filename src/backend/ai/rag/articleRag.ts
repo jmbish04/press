@@ -3,6 +3,9 @@
  *
  * Embeddings are produced with the same Workers AI model used at ingestion time
  * (so query and document vectors share a space) and routed through AI Gateway.
+ *
+ * Supports both legacy single-vector (ID = "{articleId}") and new chunked
+ * vectors (ID = "{articleId}-chunk-{N}" with metadata.articleId).
  */
 
 import { eq, inArray } from "drizzle-orm";
@@ -58,12 +61,14 @@ export async function getArticleDigests(env: Env, ids: number[]): Promise<Articl
     .filter((row): row is NonNullable<typeof row> => Boolean(row))
     .map((row) => {
       const meta = propsByArticle.get(row.id) ?? {};
+      // Prefer clean content for the excerpt (better quality for RAG grounding).
+      const content = row.cleanContent || row.rawContent || "";
       return {
         id: row.id,
         url: row.url,
         title: meta.title ?? meta.topic ?? row.url,
         summary: meta.summary ?? "",
-        excerpt: (row.rawContent ?? "").slice(0, EXCERPT_LEN),
+        excerpt: content.slice(0, EXCERPT_LEN),
       };
     });
 }
@@ -80,10 +85,38 @@ export function formatDigests(digests: ArticleDigest[]): string {
 }
 
 /**
+ * Extract article ID from a Vectorize match.
+ *
+ * Supports both legacy format (ID = "123") and chunked format
+ * (ID = "123-chunk-0", metadata.articleId = 123).
+ */
+function extractArticleId(match: { id: string; metadata?: Record<string, unknown> | null }): number {
+  // Chunked format: check metadata first.
+  if (match.metadata?.articleId) {
+    const metaId = Number(match.metadata.articleId);
+    if (Number.isFinite(metaId)) return metaId;
+  }
+
+  // Legacy format or direct ID.
+  const directId = Number(match.id);
+  if (Number.isFinite(directId)) return directId;
+
+  // Chunked format: parse from "{articleId}-chunk-{N}".
+  const chunkMatch = match.id.match(/^(\d+)-chunk-\d+$/);
+  if (chunkMatch) {
+    const parsed = Number(chunkMatch[1]);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return NaN;
+}
+
+/**
  * Vectorize similarity search, optionally scoped to a set of article IDs.
  *
- * Article IDs are stored as the Vectorize record IDs, so scoping is applied by
- * over-fetching and filtering in memory (no indexed metadata required).
+ * Article IDs are now extracted from vector metadata (chunked format) or
+ * parsed from the vector ID (legacy format). Deduplication ensures each
+ * article appears at most once in the results.
  */
 export async function retrieveArticleContext(
   env: Env,
@@ -109,18 +142,30 @@ export async function retrieveArticleDigests(
   if (!vector) return [];
 
   const scoped = articleIds.length > 0;
-  const queryK = scoped ? Math.max(topK * 4, 40) : topK;
+  // Over-fetch for scoped queries (multiple chunks per article) and for dedup.
+  const queryK = scoped ? Math.max(topK * 6, 60) : Math.max(topK * 3, 30);
   const result = await env.VECTORIZE.query(vector, {
     topK: queryK,
     returnMetadata: "all",
   });
 
-  const allowed = new Set(articleIds.map(String));
-  const orderedIds = (result.matches ?? [])
-    .filter((m) => !scoped || allowed.has(m.id))
-    .slice(0, topK)
-    .map((m) => Number(m.id))
-    .filter((n) => Number.isFinite(n));
+  const allowed = new Set(articleIds);
+
+  // Extract article IDs, deduplicate, and respect scope.
+  const seen = new Set<number>();
+  const orderedIds: number[] = [];
+
+  for (const m of result.matches ?? []) {
+    const artId = extractArticleId(m);
+    if (!Number.isFinite(artId)) continue;
+    if (scoped && !allowed.has(artId)) continue;
+    if (seen.has(artId)) continue;
+
+    seen.add(artId);
+    orderedIds.push(artId);
+
+    if (orderedIds.length >= topK) break;
+  }
 
   return getArticleDigests(env, orderedIds);
 }

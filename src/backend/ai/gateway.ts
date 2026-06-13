@@ -27,12 +27,12 @@ export const AI_GATEWAY_OPTIONS = {
 export const MODELS = {
   /** Conversational agent model. */
   chat: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-  /** Structured metadata extraction. */
-  extract: "@cf/meta/llama-3.1-8b-instruct",
+  /** Kimi K2.6 — 262K context, structured output. Default for all extraction. */
+  extract: "@cf/moonshotai/kimi-k2.6",
   /** Embeddings — must match the model the `press` Vectorize index was created with. */
   embedding: "@cf/baai/bge-large-en-v1.5",
   /** Long-form HTML/code generation for spawned artifacts. */
-  generate: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  generate: "@cf/openai/gpt-oss-120b",
 } as const;
 
 /**

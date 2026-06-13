@@ -1,26 +1,33 @@
 ---
 import "../styles/global.css";
-import NavHeader from "../components/NavHeader.astro";
-import { IngestQueue } from "../components/IngestQueue";
+import "../styles/press.css";
 ---
 
 <html lang="en" class="dark">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width" />
-    <title>Ingest · The Archive</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <title>Press · Archive</title>
+    <meta name="description" content="Press — AI-powered article archive with mind maps, narration, and visual artifacts." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="512x512" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;0,700;1,600&family=Archivo:wght@700;800&family=Archivo+Narrow:wght@700&family=Roboto+Slab:wght@700&display=swap" rel="stylesheet" />
+    <meta name="theme-color" content="#0f0f14" />
   </head>
   <body class="bg-background text-foreground min-h-screen antialiased">
-    <NavHeader current="ingest" />
-    <main class="mx-auto max-w-7xl space-y-8 p-6 lg:p-10">
-      <header class="space-y-1">
-        <h1 class="text-3xl font-bold tracking-tight">Ingest URLs</h1>
-        <p class="text-muted-foreground text-sm">
-          Paste a block of URLs, review the parsed queue, then process — live progress streams
-          back over WebSocket.
-        </p>
-      </header>
-      <IngestQueue client:load />
-    </main>
+    <div id="root" style="height:100%"></div>
+    <script>
+      import React from "react";
+      import { createRoot } from "react-dom/client";
+      import PressApp from "../components/press/PressApp";
+
+      const root = createRoot(document.getElementById("root")!);
+      root.render(React.createElement(PressApp));
+    </script>
   </body>
 </html>
