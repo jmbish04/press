@@ -70,15 +70,21 @@ function AudioBlock({ article }) {
   const timer = useRefV(null);
 
   function generate() {
+    if (timer.current) clearInterval(timer.current);
     setState("generating");
     let p = 0;
     timer.current = setInterval(() => {
       p += 8 + Math.random() * 10;
-      if (p >= 100) { clearInterval(timer.current); setState("ready"); setProgress(0); }
+      if (p >= 100) {
+        clearInterval(timer.current);
+        timer.current = null;
+        setState("ready");
+        setProgress(0);
+      }
       else setProgress(p);
     }, 220);
   }
-  useEffectV(() => () => clearInterval(timer.current), []);
+  useEffectV(() => () => { if (timer.current) clearInterval(timer.current); }, []);
   const total = `${article.readMins}:${String((article.id * 7) % 60).padStart(2, "0")}`;
 
   if (state === "idle")

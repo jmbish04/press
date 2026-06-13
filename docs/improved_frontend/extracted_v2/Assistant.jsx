@@ -62,11 +62,17 @@ function ArticleAssistant({ article }) {
     { role: "ai", text: `I've read “${article.title}.” Ask me to summarise it, pull out the key takeaways, or explain any part.` },
   ]);
   const [thinking, setThinking] = useStateA(false);
+  const timeoutRef = useRefA(null);
+  useEffectA(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   function reply(userText) {
     setMessages(m => [...m, { role: "user", text: userText }]);
     setThinking(true);
-    setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       setThinking(false);
       setMessages(m => [...m, {
         role: "ai",

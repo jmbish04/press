@@ -101,14 +101,25 @@ function GenerateModal({ kind, scopeLabel, presetPrompt, onClose, onDone }) {
   const [phase, setPhase] = useStateMM("compose"); // compose | building | done
   const [step, setStep] = useStateMM(0);
   const steps = BUILD_STEPS[kind];
+  const timerRef = useRefMM(null);
+
+  useEffectMM(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
   function start() {
     if (kind === "pwa" && !prompt.trim()) return;
     setPhase("building"); setStep(0);
     let i = 0;
-    const iv = setInterval(() => {
+    timerRef.current = setInterval(() => {
       i++;
-      if (i >= steps.length) { clearInterval(iv); setPhase("done"); setStep(steps.length); }
+      if (i >= steps.length) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        setPhase("done");
+        setStep(steps.length);
+      }
       else setStep(i);
     }, 700);
   }

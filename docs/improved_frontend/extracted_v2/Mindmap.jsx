@@ -29,6 +29,7 @@ function mindmapFor(article) {
 
 /* assign stable ids + collect into render structures with a horizontal-tree layout */
 function buildLayout(root, collapsed) {
+  if (!root) return { nodes: [], edges: [], width: 0, height: 0 };
   const COL = 230, ROW = 50;
   let leaf = 0, maxDepth = 0;
   const nodes = [], edges = [];
@@ -101,14 +102,25 @@ function GenerateModal({ kind, scopeLabel, presetPrompt, onClose, onDone }) {
   const [phase, setPhase] = useStateMM("compose"); // compose | building | done
   const [step, setStep] = useStateMM(0);
   const steps = BUILD_STEPS[kind];
+  const timerRef = useRefMM(null);
+
+  useEffectMM(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
   function start() {
     if (kind === "pwa" && !prompt.trim()) return;
     setPhase("building"); setStep(0);
     let i = 0;
-    const iv = setInterval(() => {
+    timerRef.current = setInterval(() => {
       i++;
-      if (i >= steps.length) { clearInterval(iv); setPhase("done"); setStep(steps.length); }
+      if (i >= steps.length) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        setPhase("done");
+        setStep(steps.length);
+      }
       else setStep(i);
     }, 700);
   }

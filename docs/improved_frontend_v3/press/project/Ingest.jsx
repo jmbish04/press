@@ -13,6 +13,13 @@ function Ingest({ go }) {
   const [focus, setFocus] = useStateI(false);
   const [phase, setPhase] = useStateI("idle"); // idle | submitting | done
   const [results, setResults] = useStateI([]);
+  const timeoutsRef = React.useRef([]);
+
+  React.useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach(clearTimeout);
+    };
+  }, []);
 
   const urls = useMemoI(() => {
     const m = (text.match(URL_RE) || []).map(s => s.replace(/[.,]+$/, ""));
@@ -26,7 +33,7 @@ function Ingest({ go }) {
     const r = urls.map((u, i) => ({ url: u, status: "pending" }));
     setResults(r);
     urls.forEach((u, i) => {
-      setTimeout(() => {
+      const tid = setTimeout(() => {
         setResults(prev => prev.map((x, j) => j === i ? {
           ...x,
           status: /paywall|broken|404/.test(u) ? "failed" : (Math.random() < 0.12 ? "skipped" : "archived"),
@@ -34,6 +41,7 @@ function Ingest({ go }) {
         } : x));
         if (i === urls.length - 1) setPhase("done");
       }, 500 + i * 420);
+      timeoutsRef.current.push(tid);
     });
   }
 
