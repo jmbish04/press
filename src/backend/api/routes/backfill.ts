@@ -210,10 +210,10 @@ backfillRouter.post("/:id", async (c) => {
       } catch { /* fallback */ }
 
       const audioBytes = await narrateFullArticle(c.env, content, voice);
-      const audioKey = `audio/article-${id}.wav`;
+      const audioKey = `audio/article-${id}.mp3`;
 
       await c.env.SPAWNED_PWAS.put(audioKey, audioBytes, {
-        httpMetadata: { contentType: "audio/wav", cacheControl: "public, max-age=86400" },
+        httpMetadata: { contentType: "audio/mpeg", cacheControl: "public, max-age=86400" },
       });
 
       await db.update(articles).set({ audioKey }).where(eq(articles.id, id));

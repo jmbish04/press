@@ -2,6 +2,7 @@
 import "../styles/global.css";
 import NavHeader from "../components/NavHeader.astro";
 import { ArticlesBrowse } from "../components/ArticlesBrowse";
+import AuthGate from "../components/press/AuthGate";
 ---
 
 <html lang="en" class="dark">
@@ -11,6 +12,7 @@ import { ArticlesBrowse } from "../components/ArticlesBrowse";
     <title>Articles · The Archive</title>
   </head>
   <body class="bg-background text-foreground min-h-screen antialiased">
+    <AuthGate client:load />
     <NavHeader current="articles" />
     <ArticlesBrowse client:load />
   </body>

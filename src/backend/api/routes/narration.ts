@@ -471,11 +471,11 @@ narrationRouter.post("/:id/narrate", async (c) => {
 
   try {
     const audioBytes = await narrateFullArticle(c.env, contentForNarration, voice);
-    const audioKey = `audio/article-${id}.wav`;
+    const audioKey = `audio/article-${id}.mp3`;
 
     await c.env.SPAWNED_PWAS.put(audioKey, audioBytes, {
       httpMetadata: {
-        contentType: "audio/wav",
+        contentType: "audio/mpeg",
         cacheControl: "public, max-age=86400",
       },
     });
@@ -508,7 +508,7 @@ narrationRouter.get("/:id/audio", async (c) => {
 
   return new Response(obj.body, {
     headers: {
-      "Content-Type": obj.httpMetadata?.contentType ?? "audio/wav",
+      "Content-Type": obj.httpMetadata?.contentType ?? "audio/mpeg",
       "Cache-Control": "public, max-age=86400",
     },
   });

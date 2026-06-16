@@ -111,36 +111,53 @@ const JUNK_ALT_PATTERNS = [/advertisement/i, /sponsored/i, /^ad$/i, /tracking/i]
 export interface ScrapedImage {
   src: string;
   alt: string;
+  /** Caption text from an enclosing <figure><figcaption> (empty if none). */
+  caption: string;
   width: number;
   height: number;
   naturalWidth: number;
   naturalHeight: number;
+  /** True if the image lives inside the article body (<article>/<main>/etc). */
+  inArticle: boolean;
+  /** True if the image lives in site chrome (header/nav/footer/aside). */
+  inChrome: boolean;
 }
 
 /**
  * Filter scraped images to keep only meaningful editorial images.
- * Removes tracking pixels, ad images, social icons, tiny avatars, and data URIs.
+ *
+ * Editorial images are identified primarily by whether they carry a caption
+ * (a <figcaption>), which is the cleanest signal of a "real" article image vs.
+ * an ad, icon, avatar, or tracking pixel. Large in-article images and large
+ * hero images are also kept. Everything in the site chrome is dropped.
  */
 export function filterJunkImages(images: ScrapedImage[]): ScrapedImage[] {
+  const seen = new Set<string>();
+
   return images.filter((img) => {
-    // Skip tiny images (tracking pixels, icons).
-    if (img.naturalWidth < 100 || img.naturalHeight < 100) return false;
+    const src = (img.src || "").trim();
+    if (!src || seen.has(src)) return false;
 
-    // Skip small data URIs (spacer GIFs etc).
-    if (img.src.startsWith("data:") && img.src.length < 5000) return false;
-
-    // Skip all data URIs — we can't upload them to CF Images by URL.
-    if (img.src.startsWith("data:")) return false;
-
-    // Skip junk URL patterns.
-    if (JUNK_URL_PATTERNS.some((pattern) => pattern.test(img.src))) return false;
-
-    // Skip junk alt text.
-    if (JUNK_ALT_PATTERNS.some((pattern) => pattern.test(img.alt))) return false;
-
+    // Can't upload data URIs to Cloudflare Images by URL.
+    if (src.startsWith("data:")) return false;
     // Skip SVGs (usually icons/logos).
-    if (img.src.endsWith(".svg")) return false;
+    if (/\.svg(\?|#|$)/i.test(src)) return false;
+    // Skip known ad / tracking / pixel URL patterns.
+    if (JUNK_URL_PATTERNS.some((pattern) => pattern.test(src))) return false;
+    // Skip junk alt text ("advertisement", "sponsored", …).
+    if (JUNK_ALT_PATTERNS.some((pattern) => pattern.test(img.alt))) return false;
+    // Drop anything in the header / nav / footer / sidebar.
+    if (img.inChrome) return false;
 
+    const hasCaption = (img.caption || "").trim().length > 0;
+    const big = img.naturalWidth >= 200 && img.naturalHeight >= 200;
+    const hero = img.naturalWidth >= 600 && img.naturalHeight >= 300;
+
+    // Keep: captioned images (strongest editorial signal), large in-article
+    // images, or large hero images that sit outside an explicit <article>.
+    if (!(hasCaption || (big && img.inArticle) || hero)) return false;
+
+    seen.add(src);
     return true;
   });
 }

@@ -30,6 +30,20 @@ interface ProcessingJobUpdate {
 
 const STAGES = ["Fetch", "Render", "Extract", "Embed", "Index", "Tags", "Mindmap", "Audio"];
 
+/** Maps the workflow's numeric stage to a human label (matches the workflow steps). */
+const STAGE_NAMES: Record<number, string> = {
+  0: "Init",
+  1: "Fetch",
+  2: "Render",
+  3: "Extract",
+  4: "Images",
+  5: "Embed",
+  6: "Index",
+  7: "Tags",
+  8: "Mindmap",
+  9: "Audio",
+};
+
 function hostname(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -50,6 +64,7 @@ export default function Processing() {
   const [jobs, setJobs] = useState<Record<string, ProcessingJobUpdate>>({});
   const [connected, setConnected] = useState(false);
   const [filter, setFilter] = useState<string>("");
+  const [detailJob, setDetailJob] = useState<ProcessingJobUpdate | null>(null);
 
   // Connect to the ProcessingMonitor DO via Agents SDK WebSocket.
   useAgent({
@@ -110,7 +125,9 @@ export default function Processing() {
 
   // Filter
   const filteredJobs = useMemo(() => {
-    if (!filter) return allJobs;
+    // Hide discarded jobs from the default "All" view so they don't clutter;
+    // they're still reachable via the "discarded" filter chip.
+    if (!filter) return allJobs.filter((j) => j.state !== "discarded");
     return allJobs.filter((j) => j.state === filter);
   }, [allJobs, filter]);
 
@@ -127,7 +144,10 @@ export default function Processing() {
   }, [allJobs]);
 
   const handleRetry = async (id: string) => {
-    await fetch(`/api/processing/jobs/${id}/retry`, { method: "POST" });
+    const res = await fetch(`/api/processing/jobs/${id}/retry`, { method: "POST" });
+    // Replace the failed attempt: discard the old row so the fresh run takes
+    // its place (discarded rows are hidden from the default view).
+    if (res.ok) await fetch(`/api/processing/jobs/${id}/discard`, { method: "POST" });
     if (!connected) fetchRest();
   };
 
@@ -218,9 +238,30 @@ export default function Processing() {
             </thead>
             <tbody>
               {filteredJobs.map((job) => (
-                <tr key={job.id} className={job.state === "err" ? "err-row" : ""}>
+                <tr
+                  key={job.id}
+                  className={job.state === "err" ? "err-row" : ""}
+                  onClick={job.state === "err" ? () => setDetailJob(job) : undefined}
+                  style={job.state === "err" ? { cursor: "pointer" } : undefined}
+                  title={job.state === "err" ? "Click to see the full error" : undefined}
+                >
                   <td>
                     <div className="proc-url">{hostname(job.url)}</div>
+                    {job.state === "err" && job.error && (
+                      <div
+                        style={{
+                          fontSize: 10.5,
+                          color: "var(--err)",
+                          marginTop: 3,
+                          maxWidth: 280,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {job.error}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 4 }}>
@@ -290,7 +331,10 @@ export default function Processing() {
                         <button
                           className="icon-btn"
                           title="Retry"
-                          onClick={() => handleRetry(job.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRetry(job.id);
+                          }}
                         >
                           <Icon name="refresh" size={13} />
                         </button>
@@ -299,7 +343,10 @@ export default function Processing() {
                         <button
                           className="icon-btn danger"
                           title="Discard"
-                          onClick={() => handleDiscard(job.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDiscard(job.id);
+                          }}
                         >
                           <Icon name="trash" size={13} />
                         </button>
@@ -310,6 +357,127 @@ export default function Processing() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {detailJob && (
+        <div
+          onClick={() => setDetailJob(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9998,
+            display: "grid",
+            placeItems: "center",
+            background: "color-mix(in oklab, var(--background) 68%, transparent)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(580px, 100%)",
+              maxHeight: "82vh",
+              display: "flex",
+              flexDirection: "column",
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "var(--shadow-xl)",
+              padding: 22,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <span className="stage err">err</span>
+              <h3 style={{ fontSize: 17, fontWeight: 700, margin: 0, fontFamily: "var(--font-editorial)" }}>
+                {hostname(detailJob.url)}
+              </h3>
+              <div style={{ flex: 1 }} />
+              <button className="icon-btn" title="Close" onClick={() => setDetailJob(null)}>
+                <Icon name="x" size={15} />
+              </button>
+            </div>
+
+            <a
+              href={detailJob.url}
+              target="_blank"
+              rel="noopener"
+              style={{ fontSize: 12, color: "var(--muted-foreground)", wordBreak: "break-all" }}
+            >
+              {detailJob.url}
+            </a>
+
+            <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--muted-foreground)" }}>
+              Failed at{" "}
+              <strong style={{ color: "var(--foreground)" }}>
+                {STAGE_NAMES[detailJob.stage ?? 0] ?? `stage ${detailJob.stage}`}
+              </strong>
+              {" · "}
+              {timeAgo(detailJob.updatedAt ?? detailJob.createdAt ?? null)}
+            </div>
+
+            <div
+              style={{
+                marginTop: 14,
+                fontSize: 10.5,
+                textTransform: "uppercase",
+                letterSpacing: ".09em",
+                color: "var(--muted-foreground)",
+                marginBottom: 6,
+              }}
+            >
+              Error message
+            </div>
+            <pre
+              style={{
+                margin: 0,
+                padding: "12px 14px",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-md)",
+                fontFamily: "var(--font-mono, monospace)",
+                fontSize: 12.5,
+                lineHeight: 1.6,
+                color: "var(--foreground)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                overflow: "auto",
+                flex: 1,
+                minHeight: 0,
+              }}
+            >
+              {detailJob.error?.trim() || "No error details were recorded for this job."}
+            </pre>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+              <button
+                className="btn"
+                data-variant="brand"
+                onClick={() => {
+                  handleRetry(detailJob.id);
+                  setDetailJob(null);
+                }}
+              >
+                <Icon name="refresh" size={14} /> Retry
+              </button>
+              <button
+                className="btn"
+                data-variant="outline"
+                onClick={() => {
+                  handleDiscard(detailJob.id);
+                  setDetailJob(null);
+                }}
+              >
+                <Icon name="trash" size={13} /> Discard
+              </button>
+              <div style={{ flex: 1 }} />
+              <button className="btn" data-variant="ghost" onClick={() => setDetailJob(null)}>
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

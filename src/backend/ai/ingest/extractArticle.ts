@@ -52,50 +52,6 @@ export interface ArticleExtraction {
 }
 
 // ---------------------------------------------------------------------------
-// Schema
-// ---------------------------------------------------------------------------
-
-/** JSON Schema enforced on Kimi's structured response. */
-const ARTICLE_EXTRACTION_SCHEMA = {
-  name: "article_extraction",
-  schema: {
-    type: "object",
-    properties: {
-      author: { type: "string", description: "Article author, empty string if unknown" },
-      datePublished: { type: "string", description: "ISO 8601 date (e.g. 2025-03-15), empty if unknown" },
-      articleTitle: { type: "string", description: "Article headline" },
-      summary: { type: "string", description: "2-3 sentence neutral summary" },
-      topic: { type: "string", description: "Primary subject category" },
-      source: { type: "string", description: "Publication or website name" },
-      articleContent: {
-        type: "string",
-        description:
-          "The full cleaned article body as semantic HTML. " +
-          "Use <p> for paragraphs, <strong>/<em> for emphasis, <a href> for links (preserving original hrefs), " +
-          "<h2>/<h3> for subheadings, <blockquote> for quotes, <ul>/<ol>/<li> for lists, <pre><code> for code blocks. " +
-          "Strip all navigation, footer, cookie, share, sidebar, and comment content. " +
-          "Return the COMPLETE article — do NOT truncate or summarize.",
-      },
-      imagePlacements: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            position: { type: "integer", description: "0-based paragraph index where this image belongs" },
-            altText: { type: "string", description: "Descriptive alt text" },
-            caption: { type: "string", description: "Image caption if present, empty string otherwise" },
-            originalSrc: { type: "string", description: "Original <img> src URL" },
-          },
-          required: ["position", "altText", "originalSrc"],
-        },
-        description: "Meaningful article images (hero, inline photos, diagrams). Exclude ads, pixels, icons, avatars.",
-      },
-    },
-    required: ["articleTitle", "articleContent", "imagePlacements", "summary", "topic"],
-  },
-} as const;
-
-// ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
@@ -119,7 +75,20 @@ const SYSTEM_PROMPT = `You are a precision article extractor. Given raw text scr
 - Extract author from the byline if visible. Empty string if not found.
 - Extract datePublished in ISO 8601 format from the dateline/byline. Empty string if not visible.
 - source is the publication name (e.g. "The Verge", "TechCrunch").
-- topic is a single primary category (e.g. "Technology", "AI", "Business").`;
+- topic is a single primary category (e.g. "Technology", "AI", "Business").
+
+## Output format
+Respond with a SINGLE JSON object and nothing else — no prose, no markdown code fences. The object MUST have exactly these keys:
+{
+  "author": string,
+  "datePublished": string,
+  "articleTitle": string,
+  "summary": string,
+  "topic": string,
+  "source": string,
+  "articleContent": string  // the cleaned article body as semantic HTML, starting at the real headline/first paragraph — never the nav, menu, or "skip to main content" chrome
+}
+The "articleContent" value MUST begin with the actual article (its headline or first real paragraph). Do NOT include the site navigation, section menus, "SUBSCRIBE/SIGN IN" links, or any chrome that appears before the article body.`;
 
 // ---------------------------------------------------------------------------
 // Main function
@@ -156,16 +125,19 @@ export async function extractArticle(
 
   try {
     const response = await env.AI.run(
-      MODELS.extract,
+      MODELS.chat,
       {
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: rawContent },
+          { role: "user", content: rawContent.slice(0, 24000) },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: ARTICLE_EXTRACTION_SCHEMA,
-        },
+        // JSON object mode on llama-3.3-70b — the proven-working pattern (same
+        // as assignTags). Kimi-k2.6 is a reasoning model whose response shape
+        // this parser can't read, so it always fell back to raw nav junk.
+        response_format: { type: "json_object" },
+        // Generous cap so the cleaned HTML body isn't truncated to the model's
+        // small default; bounded to stay within the model's context window.
+        max_tokens: 8000,
       } as never,
       AI_GATEWAY_OPTIONS,
     );
@@ -223,11 +195,47 @@ function fallback(rawContent: string): ArticleExtraction {
 }
 
 function safeParse(str: string): unknown {
+  // Fast path.
   try {
     return JSON.parse(str);
   } catch {
-    return null;
+    // Fall through to lenient extraction.
   }
+
+  let cleaned = str.trim();
+
+  // Strip a ```json … ``` (or bare ```) fence if the model added one.
+  const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) cleaned = fence[1].trim();
+
+  // Extract the first balanced top-level {...} object — handles reasoning
+  // models that prefix the JSON with explanatory text.
+  const start = cleaned.indexOf("{");
+  if (start !== -1) {
+    let depth = 0;
+    let inStr = false;
+    let escaped = false;
+    for (let i = start; i < cleaned.length; i++) {
+      const ch = cleaned[i];
+      if (inStr) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inStr = false;
+      } else if (ch === '"') inStr = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          try {
+            return JSON.parse(cleaned.slice(start, i + 1));
+          } catch {
+            return null;
+          }
+        }
+      }
+    }
+  }
+  return null;
 }
 
 function escapeHtml(text: string): string {

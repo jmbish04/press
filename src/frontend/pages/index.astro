@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import "../styles/press.css";
+import AuthGate from "../components/press/AuthGate";
 ---
 
 <html lang="en" class="dark">
@@ -20,6 +21,7 @@ import "../styles/press.css";
     <meta name="theme-color" content="#0f0f14" />
   </head>
   <body class="bg-background text-foreground min-h-screen antialiased">
+    <AuthGate client:load />
     <div id="root" style="height:100%"></div>
     <script>
       import React from "react";

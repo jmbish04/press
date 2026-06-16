@@ -12,6 +12,7 @@ const Newsstand = lazy(() => import("./pages/Newsstand"));
 const ArticleView = lazy(() => import("./pages/ArticleView"));
 const Ingest = lazy(() => import("./pages/Ingest"));
 const Processing = lazy(() => import("./pages/Processing"));
+const Blocked = lazy(() => import("./pages/Blocked"));
 const Studio = lazy(() => import("./pages/Studio"));
 const Notebook = lazy(() => import("./pages/Notebook"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -60,6 +61,7 @@ const PAGE_META: Record<string, { title: string; icon: string }> = {
   notebook: { title: "Notebook", icon: "book" },
   studio: { title: "Studio", icon: "studio" },
   processing: { title: "Processing", icon: "activity" },
+  blocked: { title: "Blocked", icon: "x" },
   settings: { title: "Settings & config", icon: "settings" },
   article: { title: "Article", icon: "stand" },
 };
@@ -204,6 +206,7 @@ export default function PressApp() {
             />
           )}
           {route === "processing" && <Processing />}
+          {route === "blocked" && <Blocked />}
           {route === "studio" && <Studio />}
           {route === "notebook" && (
             <Notebook

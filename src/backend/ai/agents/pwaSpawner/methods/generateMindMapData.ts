@@ -11,70 +11,6 @@ import type { MindMapData, MindMapNode } from "../types";
 import { AI_GATEWAY_OPTIONS, MODELS } from "../../../gateway";
 
 // ---------------------------------------------------------------------------
-// JSON Schema — enforced by Kimi K2.6 at the model level
-// ---------------------------------------------------------------------------
-
-/**
- * Recursive mind-map node schema.
- * JSON Schema doesn't support true recursion, so we define 3 levels explicitly
- * (root → branch → leaf), which matches the prompt constraint of max 3 deep.
- */
-const MIND_MAP_SCHEMA = {
-  name: "mind_map",
-  schema: {
-    type: "object",
-    properties: {
-      nodeData: {
-        type: "object",
-        description: "Root node of the mind map tree.",
-        properties: {
-          id: { type: "string", description: "Unique node ID. Root should be 'root'." },
-          topic: { type: "string", description: "The article title or main topic." },
-          children: {
-            type: "array",
-            description: "3 to 7 top-level theme branches.",
-            items: {
-              type: "object",
-              properties: {
-                id: { type: "string", description: "Unique branch ID (e.g. '1', '2')." },
-                topic: { type: "string", description: "Theme name — a key concept from the article." },
-                children: {
-                  type: "array",
-                  description: "2 to 4 supporting details per branch.",
-                  items: {
-                    type: "object",
-                    properties: {
-                      id: { type: "string", description: "Unique leaf ID (e.g. '1-1', '1-2')." },
-                      topic: { type: "string", description: "Specific fact, point, or detail from the article." },
-                      children: {
-                        type: "array",
-                        description: "Optional sub-details (at most 3).",
-                        items: {
-                          type: "object",
-                          properties: {
-                            id: { type: "string", description: "Unique sub-leaf ID (e.g. '1-1-1')." },
-                            topic: { type: "string", description: "Granular detail." },
-                          },
-                          required: ["id", "topic"],
-                        },
-                      },
-                    },
-                    required: ["id", "topic"],
-                  },
-                },
-              },
-              required: ["id", "topic"],
-            },
-          },
-        },
-        required: ["id", "topic", "children"],
-      },
-    },
-    required: ["nodeData"],
-  },
-} as const;
-
-// ---------------------------------------------------------------------------
 // Prompts
 // ---------------------------------------------------------------------------
 
@@ -82,7 +18,14 @@ const SYSTEM_PROMPT =
   `You are a mind-map generator. Given an article, produce a structured mind ` +
   `map that captures the key themes, arguments, and supporting details. ` +
   `Each branch topic should be a concise phrase (not a full sentence). ` +
-  `Leaf nodes should contain specific facts, names, or data points from the article.`;
+  `Leaf nodes should contain specific facts, names, or data points from the article.\n\n` +
+  `Respond with a SINGLE JSON object and nothing else — no prose, no markdown fences. ` +
+  `Use exactly this shape:\n` +
+  `{"nodeData":{"id":"root","topic":"<article title>","children":[` +
+  `{"id":"1","topic":"<theme>","children":[{"id":"1-1","topic":"<detail>"}]}` +
+  `]}}\n` +
+  `The root MUST have 3 to 7 children, and each of those MUST have 2 to 4 children. ` +
+  `Never return an empty children array on the root.`;
 
 function buildPrompt(title: string, content: string): string {
   return `Build a mind map for this article.
@@ -179,16 +122,17 @@ export async function generateMindMapData(
 ): Promise<MindMapData> {
   try {
     const response = await env.AI.run(
-      MODELS.extract,
+      MODELS.chat,
       {
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: buildPrompt(title, articleContent.slice(0, 6000)) },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: MIND_MAP_SCHEMA,
-        },
+        // JSON object mode on llama-3.3-70b (schema described in the prompt).
+        // Kimi-k2.6's reasoning-model response shape isn't parseable here, which
+        // is why mind maps came back as a single root node.
+        response_format: { type: "json_object" },
+        max_tokens: 4000,
       } as never,
       AI_GATEWAY_OPTIONS,
     );

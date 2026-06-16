@@ -7,12 +7,23 @@
  */
 
 import type { Context, Next } from "hono";
+import { getCookie } from "hono/cookie";
 
-/** Reads the API key from `Authorization: Bearer <key>` or `X-API-Key`. */
+/** Cookie the interactive UI stores the access key in (same-origin). */
+export const API_KEY_COOKIE = "press_api_key";
+
+/**
+ * Reads the API key from `Authorization: Bearer <key>`, the `X-API-Key`
+ * header, or the same-origin `press_api_key` cookie (set by the UI's access
+ * modal). Headers take precedence so external/programmatic callers are
+ * unaffected.
+ */
 function readKey(c: Context<{ Bindings: Env }>): string | undefined {
   const header = c.req.header("Authorization");
   if (header?.startsWith("Bearer ")) return header.slice(7).trim();
-  return c.req.header("X-API-Key")?.trim();
+  const xKey = c.req.header("X-API-Key")?.trim();
+  if (xKey) return xKey;
+  return getCookie(c, API_KEY_COOKIE)?.trim();
 }
 
 /** Rejects requests whose API key does not match the stored `WORKER_API_KEY`. */

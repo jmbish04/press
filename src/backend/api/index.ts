@@ -23,6 +23,7 @@ import { articlesRouter } from "./routes/articles";
 import { artifactAssetsRouter, artifactsRouter } from "./routes/artifacts";
 import { authRouter } from "./routes/auth";
 import { backfillRouter } from "./routes/backfill";
+import { blockedRouter } from "./routes/blocked";
 import { dashboardRouter } from "./routes/dashboard";
 import { documentsRouter } from "./routes/documents";
 import { narrationRouter } from "./routes/narration";
@@ -171,6 +172,7 @@ app.route("/api/processing", processingRouter);
 app.route("/api/views", viewsRouter);
 app.route("/api/preferences", preferencesRouter);
 app.route("/api/admin/backfill", backfillRouter);
+app.route("/api/blocked", blockedRouter);
 app.route("/api/analytics", analyticsRouter);
 app.route("/artifacts", artifactAssetsRouter);
 

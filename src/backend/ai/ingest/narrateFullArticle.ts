@@ -1,25 +1,44 @@
 /**
- * @fileoverview Full-article narration via chunked TTS + WAV merge.
+ * @fileoverview Full-article narration via chunked TTS.
  *
- * Generates a single WAV file covering the ENTIRE article by:
+ * Generates a single MP3 file covering the ENTIRE article by:
  *   1. Stripping HTML from cleanContent to get plain prose
  *   2. Chunking by paragraph boundaries into ~4000 char batches
- *   3. Calling Deepgram Aura-2 for each chunk
- *   4. Merging WAV buffers (strip headers from chunks 2+, concatenate PCM)
+ *   3. Calling Deepgram Aura-2 (English) for each chunk with `speaker` + mp3 encoding
+ *   4. Concatenating the MP3 chunks into one buffer
+ *
+ * Returns an MP3 ArrayBuffer. Aura-2's binding hands back a ReadableStream of
+ * MPEG audio (NOT a WAV ArrayBuffer), so callers must store it as `audio/mpeg`.
  *
  * Used by the narration route, Workflow audio step, and backfill audio.
  */
 
 import { AI_GATEWAY_OPTIONS } from "../gateway";
 
-/** Deepgram Aura-2 TTS model on Workers AI. */
+/** Deepgram Aura-2 (English) TTS model on Workers AI. */
 const TTS_MODEL = "@cf/deepgram/aura-2-en";
 
-/** Target chunk size in characters. Well within Aura-2's safe zone. */
-const CHUNK_TARGET = 4000;
+/**
+ * Aura-2 rejects any single request whose `text` exceeds 2000 characters
+ * (API error 8007). Keep chunks comfortably under that.
+ */
+const MAX_TTS_CHARS = 2000;
+const CHUNK_TARGET = 1800;
 
-/** Standard WAV header size in bytes. */
-const WAV_HEADER_SIZE = 44;
+/**
+ * Valid aura-2-en speaker names. The model takes a `speaker` parameter (the
+ * old code passed `voice`, which the model ignored). Anything outside this set
+ * is rejected, so we validate and fall back to a known-good default.
+ */
+const VALID_SPEAKERS = new Set([
+  "amalthea", "andromeda", "apollo", "arcas", "aries", "asteria", "athena",
+  "atlas", "aurora", "callista", "cora", "cordelia", "delia", "draco",
+  "electra", "harmonia", "helena", "hera", "hermes", "hyperion", "iris",
+  "janus", "juno", "jupiter", "luna", "mars", "minerva", "neptune", "odysseus",
+  "ophelia", "orion", "orpheus", "pandora", "phoebe", "pluto", "saturn",
+  "thalia", "theia", "vesta", "zeus",
+]);
+const DEFAULT_SPEAKER = "asteria";
 
 // ---------------------------------------------------------------------------
 // Main function
@@ -32,8 +51,8 @@ const WAV_HEADER_SIZE = 44;
  * @param content Clean article text (HTML or plain text). HTML tags are
  *   stripped to produce natural-sounding prose. Pass `cleanContent` from the
  *   Kimi extraction — never raw scraped text.
- * @param voice Aura-2 voice name (e.g. "asteria", "luna", "stella")
- * @returns Single merged WAV ArrayBuffer covering the entire article
+ * @param voice Aura-2 speaker name (e.g. "asteria", "luna", "orion")
+ * @returns Single MP3 ArrayBuffer covering the entire article
  */
 export async function narrateFullArticle(
   env: Env,
@@ -47,35 +66,35 @@ export async function narrateFullArticle(
     throw new Error("Content too short for narration");
   }
 
-  // Chunk by paragraph boundaries.
-  const chunks = chunkByParagraph(plainText, CHUNK_TARGET);
+  const speaker = VALID_SPEAKERS.has(voice) ? voice : DEFAULT_SPEAKER;
 
-  // Generate audio for each chunk.
-  const wavBuffers: ArrayBuffer[] = [];
+  // Chunk by paragraph boundaries, then hard-cap any chunk that still exceeds
+  // the model's per-request character limit (e.g. one very long sentence).
+  const chunks = hardCap(chunkByParagraph(plainText, CHUNK_TARGET), MAX_TTS_CHARS);
+
+  // Generate audio for each chunk. aura-2 returns a ReadableStream of MPEG
+  // (MP3) audio — NOT a WAV ArrayBuffer — so we read the bytes of each chunk
+  // and concatenate the MP3 frames into one file.
+  const parts: Uint8Array[] = [];
 
   for (const chunk of chunks) {
     if (!chunk.trim()) continue;
 
     const response = await env.AI.run(
       TTS_MODEL as never,
-      { text: chunk, voice } as never,
+      { text: chunk, speaker, encoding: "mp3" } as never,
       AI_GATEWAY_OPTIONS,
     );
 
-    wavBuffers.push(response as unknown as ArrayBuffer);
+    const bytes = await toBytes(response);
+    if (bytes.byteLength > 0) parts.push(bytes);
   }
 
-  if (wavBuffers.length === 0) {
+  if (parts.length === 0) {
     throw new Error("No audio chunks generated");
   }
 
-  // Single chunk — return directly, no merge needed.
-  if (wavBuffers.length === 1) {
-    return wavBuffers[0];
-  }
-
-  // Merge multiple WAV buffers into one.
-  return mergeWavBuffers(wavBuffers);
+  return concatBytes(parts);
 }
 
 // ---------------------------------------------------------------------------
@@ -146,59 +165,72 @@ function chunkBySentence(text: string, targetSize: number): string[] {
   return chunks;
 }
 
+/**
+ * Final safety net: split any chunk still longer than `max` characters into
+ * `max`-sized pieces so no request can exceed the model's hard limit.
+ */
+function hardCap(chunks: string[], max: number): string[] {
+  const out: string[] = [];
+  for (const chunk of chunks) {
+    if (chunk.length <= max) {
+      out.push(chunk);
+      continue;
+    }
+    for (let i = 0; i < chunk.length; i += max) {
+      out.push(chunk.slice(i, i + max));
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
-// WAV merge
+// Audio response handling
 // ---------------------------------------------------------------------------
 
 /**
- * Merge multiple WAV buffers into a single WAV file.
- *
- * Assumes all WAV files share the same sample rate, bit depth, and channel
- * count (which they do since they all come from the same Aura-2 model).
- *
- * Strategy:
- * - Read the WAV header (44 bytes) from the first buffer
- * - Extract raw PCM data (bytes 44+) from each buffer
- * - Concatenate all PCM payloads
- * - Write a new WAV header with updated sizes
+ * Normalise whatever `env.AI.run` returns for a TTS call into raw bytes.
+ * The binding usually returns a ReadableStream, but depending on the runtime
+ * it may also hand back a Response, an ArrayBuffer, or a `{ audio }` payload.
  */
-function mergeWavBuffers(buffers: ArrayBuffer[]): ArrayBuffer {
-  // Read header from first buffer to get audio format details.
-  const firstView = new DataView(buffers[0]);
-
-  // Collect PCM data from all buffers (skip 44-byte header from each).
-  const pcmChunks: Uint8Array[] = [];
-  let totalPcmLength = 0;
-
-  for (const buf of buffers) {
-    if (buf.byteLength <= WAV_HEADER_SIZE) continue;
-    const pcm = new Uint8Array(buf, WAV_HEADER_SIZE);
-    pcmChunks.push(pcm);
-    totalPcmLength += pcm.byteLength;
+async function toBytes(res: unknown): Promise<Uint8Array> {
+  if (res instanceof Uint8Array) return res;
+  if (res instanceof ArrayBuffer) return new Uint8Array(res);
+  if (res instanceof ReadableStream) {
+    return new Uint8Array(await new Response(res).arrayBuffer());
   }
-
-  // Build the merged WAV buffer: 44-byte header + all PCM data.
-  const merged = new ArrayBuffer(WAV_HEADER_SIZE + totalPcmLength);
-  const mergedView = new DataView(merged);
-  const mergedBytes = new Uint8Array(merged);
-
-  // Copy the original header.
-  mergedBytes.set(new Uint8Array(buffers[0], 0, WAV_HEADER_SIZE));
-
-  // Update file size: total file size - 8 bytes ("RIFF" + file size field).
-  mergedView.setUint32(4, WAV_HEADER_SIZE + totalPcmLength - 8, true);
-
-  // Update data chunk size (at byte offset 40).
-  mergedView.setUint32(40, totalPcmLength, true);
-
-  // Copy PCM data.
-  let offset = WAV_HEADER_SIZE;
-  for (const pcm of pcmChunks) {
-    mergedBytes.set(pcm, offset);
-    offset += pcm.byteLength;
+  if (res instanceof Response) {
+    return new Uint8Array(await res.arrayBuffer());
   }
+  if (res && typeof res === "object" && "audio" in (res as Record<string, unknown>)) {
+    const audio = (res as { audio: unknown }).audio;
+    if (typeof audio === "string") return base64ToBytes(audio);
+    if (audio instanceof ArrayBuffer) return new Uint8Array(audio);
+  }
+  // Last resort — let Response figure it out (e.g. a Blob).
+  return new Uint8Array(await new Response(res as BodyInit).arrayBuffer());
+}
 
-  return merged;
+/** Decode a base64 (or data-URI) string to bytes. */
+function base64ToBytes(b64: string): Uint8Array {
+  const comma = b64.indexOf(",");
+  const raw = b64.startsWith("data:") && comma !== -1 ? b64.slice(comma + 1) : b64;
+  const bin = atob(raw);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** Concatenate audio byte chunks into one ArrayBuffer. */
+function concatBytes(parts: Uint8Array[]): ArrayBuffer {
+  let total = 0;
+  for (const p of parts) total += p.byteLength;
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const p of parts) {
+    out.set(p, offset);
+    offset += p.byteLength;
+  }
+  return out.buffer;
 }
 
 // ---------------------------------------------------------------------------

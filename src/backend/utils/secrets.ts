@@ -57,6 +57,17 @@ export async function getCloudflareApiToken(env: Env): Promise<string> {
   return value;
 }
 
+/**
+ * Resolve the token used for Browser Rendering REST API calls. Prefers the
+ * dedicated `CF_BROWSER_RENDER_TOKEN` secret; falls back to the general
+ * Cloudflare API token.
+ */
+export async function getBrowserRenderToken(env: Env): Promise<string> {
+  const dedicated = await readSecret(env.CF_BROWSER_RENDER_TOKEN);
+  if (dedicated) return dedicated;
+  return getCloudflareApiToken(env);
+}
+
 // ---------------------------------------------------------------------------
 // Cloudflare Images
 // ---------------------------------------------------------------------------

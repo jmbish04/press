@@ -353,8 +353,9 @@ export default function ArticleView({ article, onBack }: ArticleViewProps) {
                 <a href={article.url} target="_blank" rel="noopener">{article.url}</a>.
               </p>
             )}
-            {/* Inline article images from Cloudflare Images */}
-            {detail?.images && detail.images.length > 0 && !cleanContent && (
+            {/* Article images hosted on Cloudflare Images (captioned editorial
+                images scraped during ingestion). Shown after the article body. */}
+            {detail?.images && detail.images.length > 0 && (
               <div className="reader-images">
                 {detail.images.map((img) => (
                   <figure key={img.id} className="reader-img">
