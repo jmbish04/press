@@ -44,7 +44,7 @@ export default function AuthGate() {
       if (res.ok) {
         // Persist for a year. SameSite=Lax keeps the key off cross-site POSTs
         // (CSRF-safe) while still sending it on the app's own requests.
-        document.cookie = `${COOKIE}=${encodeURIComponent(k)}; path=/; max-age=31536000; samesite=lax`;
+        document.cookie = `${COOKIE}=${encodeURIComponent(k)}; path=/; max-age=31536000; samesite=lax; secure`;
         setNeedKey(false);
         setKey("");
       } else {
