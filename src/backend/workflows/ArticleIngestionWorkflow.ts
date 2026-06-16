@@ -378,20 +378,26 @@ export class ArticleIngestionWorkflow extends WorkflowEntrypoint<Env, IngestionP
 
           let position = 0;
           for (const img of scrapedImages.slice(0, 10)) {
-            // Cap at 10 images per article.
+            // Cap at 10 images per article. A single failing upload must not
+            // fail the whole step (a retry would re-upload the ones that already
+            // succeeded, duplicating them in Cloudflare Images).
             const imageName = (img.caption || img.alt || "Article image").slice(0, 200);
-            const result = await uploadImageToCF(this.env, img.src, {
-              articleId: 0, // Will be set after index step.
-              imageName,
-            });
-
-            if (result) {
-              uploaded.push({
-                cfUrl: result.url,
+            try {
+              const result = await uploadImageToCF(this.env, img.src, {
+                articleId: 0, // Will be set after index step.
                 imageName,
-                position: position++,
-                caption: img.caption || "",
               });
+
+              if (result) {
+                uploaded.push({
+                  cfUrl: result.url,
+                  imageName,
+                  position: position++,
+                  caption: img.caption || "",
+                });
+              }
+            } catch (err) {
+              console.error(`Image upload failed for ${img.src}:`, err);
             }
           }
 
@@ -400,8 +406,7 @@ export class ArticleIngestionWorkflow extends WorkflowEntrypoint<Env, IngestionP
       );
 
       // ── Step 5: Embed (chunked) ────────────────────────────────────────
-      const ragUuid = crypto.randomUUID();
-      await step.do(
+      const embedResult = await step.do(
         "embed",
         {
           retries: { limit: 3, delay: "10 seconds", backoff: "exponential" },
@@ -410,7 +415,13 @@ export class ArticleIngestionWorkflow extends WorkflowEntrypoint<Env, IngestionP
         async () => {
           await updateJobProgress(this.env, jobId, { stage: 5 });
 
-          // Use Kimi-cleaned content (HTML stripped to text) for better RAG quality.
+          // Generate the RAG UUID INSIDE the step so it is captured in the
+          // cached step result. Generating it in the workflow body would
+          // produce a new value on every replay/retry, desyncing the Vectorize
+          // metadata from the indexed article row and breaking RAG search.
+          const ragUuid = crypto.randomUUID();
+
+          // Use cleaned content (HTML stripped to text) for better RAG quality.
           const contentForEmbedding = extraction.articleContent || renderResult.textContent;
           const chunks = chunkText(contentForEmbedding);
 
@@ -456,7 +467,7 @@ export class ArticleIngestionWorkflow extends WorkflowEntrypoint<Env, IngestionP
               title: extractedTitle,
               rawContent: renderResult.textContent,
               cleanContent: extraction.articleContent || null,
-              ragUuid,
+              ragUuid: embedResult.ragUuid,
               ...(renderResult.screenshotKey ? { screenshotKey: renderResult.screenshotKey } : {}),
               ...(renderResult.fullScreenshotKey
                 ? { fullScreenshotKey: renderResult.fullScreenshotKey }
@@ -485,7 +496,7 @@ export class ArticleIngestionWorkflow extends WorkflowEntrypoint<Env, IngestionP
                 title: extractedTitle,
                 rawContent: renderResult.textContent,
                 cleanContent: extraction.articleContent || null,
-                ragUuid,
+                ragUuid: embedResult.ragUuid,
                 ...(renderResult.screenshotKey
                   ? { screenshotKey: renderResult.screenshotKey }
                   : {}),
@@ -547,7 +558,7 @@ export class ArticleIngestionWorkflow extends WorkflowEntrypoint<Env, IngestionP
                   {
                     id: `${articleId}-chunk-${chunk.index}`,
                     values: vector,
-                    metadata: { rag_uuid: ragUuid, articleId, chunkIndex: chunk.index, url },
+                    metadata: { rag_uuid: embedResult.ragUuid, articleId, chunkIndex: chunk.index, url },
                   },
                 ]);
               }

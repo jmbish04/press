@@ -42,9 +42,10 @@ export default function AuthGate() {
     try {
       const res = await fetch("/api/auth/check", { headers: { "X-API-Key": k } });
       if (res.ok) {
-        // Persist for a year. SameSite=Lax keeps the key off cross-site POSTs
-        // (CSRF-safe) while still sending it on the app's own requests.
-        document.cookie = `${COOKIE}=${encodeURIComponent(k)}; path=/; max-age=31536000; samesite=lax; secure`;
+        // Persist for a year. SameSite=Strict keeps the key off ALL cross-site
+        // requests (CSRF-safe — including expensive GET endpoints reached via
+        // top-level navigation); `secure` restricts it to HTTPS.
+        document.cookie = `${COOKIE}=${encodeURIComponent(k)}; path=/; max-age=31536000; samesite=strict; secure`;
         setNeedKey(false);
         setKey("");
       } else {
