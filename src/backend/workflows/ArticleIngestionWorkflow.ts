@@ -25,8 +25,10 @@ import { WorkflowEntrypoint, WorkflowStep } from "cloudflare:workers";
 import type { WorkflowEvent } from "cloudflare:workers";
 import { NonRetryableError } from "cloudflare:workflows";
 import { eq } from "drizzle-orm";
+import { getAgentByName } from "agents";
 
 import { getDb } from "../db";
+import type { ProcessingMonitor } from "../ai/agents/processingMonitor";
 import { articles, articleImages, ingestionJobs, preferences, sources } from "../db/schemas";
 import { AI_GATEWAY_OPTIONS, MODELS, embed } from "../ai/gateway";
 import { generateMindMapData } from "../ai/agents/pwaSpawner/methods/generateMindMapData";
@@ -89,9 +91,12 @@ async function updateJobProgress(
       .get();
 
     if (row) {
-      const monitorId = env.PROCESSING_MONITOR.idFromName("global");
-      const monitor = env.PROCESSING_MONITOR.get(monitorId);
-      await (monitor as any).broadcastUpdate({
+      // Native Agents SDK RPC — typed stub, no hand-built request, no `as any`.
+      const monitor = await getAgentByName<Env, ProcessingMonitor>(
+        env.PROCESSING_MONITOR,
+        "global",
+      );
+      await monitor.broadcastUpdate({
         id: jobId,
         url: row.url,
         stage: row.stage ?? 0,
