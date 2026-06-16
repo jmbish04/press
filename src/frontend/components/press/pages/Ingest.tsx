@@ -37,6 +37,7 @@ export default function Ingest({ onIngested }: IngestProps) {
   const [focused, setFocused] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<Array<{ url: string; status: string; title?: string }>>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const urls = useMemo(() => extractUrls(text), [text]);
 
@@ -44,6 +45,7 @@ export default function Ingest({ onIngested }: IngestProps) {
     if (urls.length === 0) return;
     setSubmitting(true);
     setResults([]);
+    setError(null);
 
     try {
       const res = await fetch("/api/articles/submit", {
@@ -51,6 +53,17 @@ export default function Ingest({ onIngested }: IngestProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ urls }),
       });
+
+      if (!res.ok) {
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(
+          res.status === 401
+            ? "Access key missing or invalid — reload the page to re-enter it."
+            : errData.error ?? `Submission failed (HTTP ${res.status}).`,
+        );
+        return;
+      }
+
       const data = await res.json() as {
         results?: Array<{ url: string; status: string; title?: string; articleId?: number }>;
       };
@@ -71,6 +84,7 @@ export default function Ingest({ onIngested }: IngestProps) {
       setText("");
     } catch (err) {
       console.error("Ingest failed:", err);
+      setError("Network error — couldn't reach the server.");
     } finally {
       setSubmitting(false);
     }
@@ -114,6 +128,26 @@ export default function Ingest({ onIngested }: IngestProps) {
             </div>
           )}
         </div>
+
+        {error && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: "11px 14px",
+              border: "1px solid var(--err)",
+              borderRadius: "var(--radius-lg)",
+              background: "oklch(0.66 0.2 22 / 12%)",
+              color: "var(--err)",
+              fontSize: 13,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <Icon name="x" size={14} />
+            {error}
+          </div>
+        )}
 
         {urls.length > 0 && (
           <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>

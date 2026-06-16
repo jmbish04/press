@@ -9,8 +9,16 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { users, sessions } from "../../db/schema";
+import { apiKeyMiddleware } from "../middleware/apiKey";
 
 const authRouter = new Hono<{ Bindings: Env }>();
+
+/**
+ * GET /api/auth/check — validates an access key supplied via the `X-API-Key`
+ * header (or the `press_api_key` cookie). Returns 200 if valid, 401 otherwise.
+ * The UI's access modal calls this to verify a key before persisting it.
+ */
+authRouter.get("/check", apiKeyMiddleware, (c) => c.json({ ok: true }));
 
 // Validation schemas
 const loginSchema = z.object({

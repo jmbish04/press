@@ -15,6 +15,7 @@ export type Route =
   | "notebook"
   | "studio"
   | "processing"
+  | "blocked"
   | "settings"
   | "article";
 
@@ -31,6 +32,7 @@ const NAV: { id: Route; label: string; icon: string }[] = [
   { id: "notebook", label: "Notebook", icon: "book" },
   { id: "studio", label: "Studio", icon: "studio" },
   { id: "processing", label: "Processing", icon: "activity" },
+  { id: "blocked", label: "Blocked", icon: "x" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -181,6 +183,7 @@ const DOCK_NAV: { id: Route; label: string; icon: string }[] = [
   { id: "notebook", label: "Notebook", icon: "book" },
   { id: "studio", label: "Studio", icon: "studio" },
   { id: "processing", label: "Activity", icon: "activity" },
+  { id: "blocked", label: "Blocked", icon: "x" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 

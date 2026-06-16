@@ -242,18 +242,29 @@ export async function processArticle(
     // ── Image scraping ─────────────────────────────────────────────────
     let pageImages: ScrapedImage[] = [];
     try {
-      pageImages = await page.evaluate(() => {
-        const imgs = Array.from(document.querySelectorAll("img"));
-        return imgs.map((img) => ({
-          src: img.src,
+      const scraped = await page.evaluate(() => {
+        const CHROME_SEL =
+          "header, footer, nav, aside, [role=banner], [role=navigation], [role=contentinfo]";
+        const ARTICLE_SEL =
+          "article, main, [role=main], .article-body, .article__body, .post-content, .entry-content, .c-entry-content, [itemprop=articleBody]";
+        const captionFor = (img: HTMLImageElement): string => {
+          const fig = img.closest("figure");
+          const cap = fig?.querySelector("figcaption");
+          return cap?.textContent?.trim() ?? "";
+        };
+        return Array.from(document.querySelectorAll("img")).map((img) => ({
+          src: img.currentSrc || img.src,
           alt: img.alt || "",
+          caption: captionFor(img),
           width: img.width,
           height: img.height,
           naturalWidth: img.naturalWidth,
           naturalHeight: img.naturalHeight,
+          inArticle: !!img.closest(ARTICLE_SEL),
+          inChrome: !!img.closest(CHROME_SEL),
         }));
       });
-      pageImages = filterJunkImages(pageImages);
+      pageImages = filterJunkImages(scraped as ScrapedImage[]);
     } catch (err) {
       console.error(`Image scraping failed for ${url}`, err);
     }

@@ -7,10 +7,10 @@
  * - `GET /api/articles/:id/pdf` — on-demand Browser Rendering PDF, cached in R2.
  */
 
-import puppeteer from "@cloudflare/puppeteer";
 import { desc, eq, inArray, and } from "drizzle-orm";
 import { Hono } from "hono";
 
+import { renderPdf } from "../../ai/ingest/browserRest";
 import { getDb } from "../../db";
 import { articleImages, articleProperties, articleTags, articles, propertyKeys, sources, tags } from "../../db/schemas";
 
@@ -282,30 +282,30 @@ articlesRouter.get("/:id/pdf", async (c) => {
     return new Response(cached.body, {
       headers: {
         "Content-Type": "application/pdf",
+        // `inline` so the PDF renders inside the viewer <iframe> instead of
+        // triggering a download (some browsers download application/pdf by
+        // default without this).
+        "Content-Disposition": `inline; filename="article-${id}.pdf"`,
         "Cache-Control": "public, max-age=31536000",
       },
     });
   }
 
-  // Fallback: on-demand rendering via Browser Rendering.
-  const browser = await puppeteer.launch(c.env.BROWSER);
-  try {
-    const page = await browser.newPage();
-    await page.goto(row.url, { waitUntil: "domcontentloaded" });
-    await new Promise((r) => setTimeout(r, 600));
-    const pdf = (await page.pdf({ format: "A4", printBackground: true })) as Uint8Array;
-    const key = `pdf/${id}.pdf`;
-    await c.env.SPAWNED_PWAS.put(key, pdf, {
-      httpMetadata: { contentType: "application/pdf", cacheControl: "public, max-age=31536000" },
-    });
-    // Persist the key so future requests skip rendering.
-    await db.update(articles).set({ pdfKey: key }).where(eq(articles.id, id));
-    return new Response(pdf as unknown as BodyInit, {
-      headers: { "Content-Type": "application/pdf" },
-    });
-  } finally {
-    await browser.close();
-  }
+  // Fallback: on-demand rendering via the Browser Rendering REST API.
+  const pdf = await renderPdf(c.env, row.url);
+  const key = `pdf/${id}.pdf`;
+  await c.env.SPAWNED_PWAS.put(key, pdf, {
+    httpMetadata: { contentType: "application/pdf", cacheControl: "public, max-age=31536000" },
+  });
+  // Persist the key so future requests skip rendering.
+  await db.update(articles).set({ pdfKey: key }).where(eq(articles.id, id));
+  return new Response(pdf as unknown as BodyInit, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="article-${id}.pdf"`,
+      "Cache-Control": "public, max-age=31536000",
+    },
+  });
 });
 
 /**
@@ -328,9 +328,15 @@ articlesRouter.get("/:id/audio", async (c) => {
   const obj = await c.env.SPAWNED_PWAS.get(row.audioKey);
   if (!obj) return c.json({ error: "Audio file not found in R2" }, 404);
 
+  // Derive the content type from what was stored (mp3 → audio/mpeg) so old and
+  // new audio both stream correctly.
+  const audioType =
+    obj.httpMetadata?.contentType ??
+    (row.audioKey.endsWith(".mp3") ? "audio/mpeg" : "audio/wav");
+
   return new Response(obj.body, {
     headers: {
-      "Content-Type": "audio/wav",
+      "Content-Type": audioType,
       "Cache-Control": "public, max-age=86400",
     },
   });
