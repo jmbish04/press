@@ -112,7 +112,7 @@ aiRouter.post("/text-to-speech", zValidator("json", textToSpeechSchema), async (
 
   try {
     const response = await c.env.AI.run(
-      "@cf/deepgram/aura-1",
+      "@cf/deepgram/aura-1" as any,
       {
         text,
         voice,

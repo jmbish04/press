@@ -28,6 +28,8 @@ export interface SpawnArtifactInput {
   articleIds?: number[];
   /** Optional extra instructions for the generator. */
   brief?: string;
+  /** When set, creates a new version linked to this artifact (iteration chain). */
+  iterateArtifactId?: string;
 }
 
 /** Result returned by a successful spawn. */

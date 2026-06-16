@@ -130,6 +130,110 @@ const openApiSpec = {
         },
       },
     },
+    "/sources": {
+      get: {
+        summary: "List all publication sources",
+        tags: ["Sources"],
+        description:
+          "Returns all publication sources with their style profiles and article counts.",
+        responses: {
+          "200": {
+            description: "Sources retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    sources: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          id: { type: "integer" },
+                          key: { type: "string" },
+                          name: { type: "string" },
+                          accent: {
+                            type: "string",
+                            nullable: true,
+                            description: "OKLCH accent colour for the masthead",
+                          },
+                          ink: {
+                            type: "string",
+                            nullable: true,
+                            description: 'Text colour on the masthead ("#fff" or "#111")',
+                          },
+                          bg: {
+                            type: "string",
+                            nullable: true,
+                            description: "Background colour for synthetic renders",
+                          },
+                          short: {
+                            type: "string",
+                            nullable: true,
+                            description: "Short code (1–3 chars)",
+                          },
+                          face: {
+                            type: "string",
+                            nullable: true,
+                            enum: ["serif", "grotesque", "condensed", "mono", "slab"],
+                            description: "Typographic personality of the masthead wordmark",
+                          },
+                          articleCount: { type: "integer" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/sources/{id}": {
+      put: {
+        summary: "Update a source's style profile",
+        tags: ["Sources"],
+        description:
+          "Update any combination of name, accent, ink, bg, short, face for a publication source.",
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer" },
+          },
+        ],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  accent: { type: "string" },
+                  ink: { type: "string" },
+                  bg: { type: "string" },
+                  short: { type: "string" },
+                  face: {
+                    type: "string",
+                    enum: ["serif", "grotesque", "condensed", "mono", "slab"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Source updated successfully",
+          },
+          "404": {
+            description: "Source not found",
+          },
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {

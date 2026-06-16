@@ -323,12 +323,11 @@ export function IngestQueue() {
 
       if (clipboardItems && clipboardItems.length > 0) {
         for (const item of clipboardItems) {
-          const plain =
-            item.types.includes("text/plain")
-              ? "text/plain"
-              : item.types.includes("text/uri-list")
-                ? "text/uri-list"
-                : null;
+          const plain = item.types.includes("text/plain")
+            ? "text/plain"
+            : item.types.includes("text/uri-list")
+              ? "text/uri-list"
+              : null;
           if (!plain) continue;
 
           try {
@@ -517,7 +516,11 @@ URLs are auto-extracted, deduplicated, and grouped by domain on the next step.`}
           />
         </CardContent>
         <CardFooter className="justify-end gap-2">
-          <Button variant="outline" onClick={() => void handleSmartIngest()} disabled={smartIngesting}>
+          <Button
+            variant="outline"
+            onClick={() => void handleSmartIngest()}
+            disabled={smartIngesting}
+          >
             <Sparkles className="mr-2 size-4" />
             Smart Ingest Clipboard
           </Button>

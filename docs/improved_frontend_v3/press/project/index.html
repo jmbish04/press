@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Press — archive</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="data.js"></script>
+<script type="text/babel" src="Common.jsx"></script>
+<script type="text/babel" src="Shell.jsx"></script>
+<script type="text/babel" src="Ingest.jsx"></script>
+<script type="text/babel" src="Newsstand.jsx"></script>
+<script type="text/babel" src="Assistant.jsx"></script>
+<script type="text/babel" src="ArticleView.jsx"></script>
+<script type="text/babel" src="Notebook.jsx"></script>
+<script type="text/babel" src="Processing.jsx"></script>
+<script type="text/babel" src="Notifications.jsx"></script>
+<script type="text/babel" src="Settings.jsx"></script>
+<script type="text/babel" src="Mindmap.jsx"></script>
+<script type="text/babel" src="Studio.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const PAGE_META = {
+  ingest:     { title: "Add to archive", icon: "inbox" },
+  stand:      { title: "Newsstand",       icon: "stand" },
+  notebook:   { title: "Notebook",        icon: "book" },
+  processing: { title: "Processing",      icon: "activity" },
+  article:    { title: "Article",         icon: "doc" },
+  settings:   { title: "Settings",        icon: "settings" },
+  studio:     { title: "Studio",          icon: "studio" },
+};
+
+function App() {
+  const [route, setRoute] = useState("stand");
+  const [article, setArticle] = useState(null);
+  const [standTag, setStandTag] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [standTags, setStandTags] = useState(null);
+  const [notiOpen, setNotiOpen] = useState(false);
+  const [notifications, setNotifications] = useState(window.NOTIFICATIONS);
+  const [savedViews, setSavedViews] = useState(window.SAVED_VIEWS);
+  const [setSection, setSetSectionState] = useState("tags");
+  const [setFocusNew, setSetFocusNew] = useState(false);
+  const [artifacts, setArtifacts] = useState(window.ARTIFACTS);
+  const [genReq, setGenReq] = useState(null);
+  const [studioOpenId, setStudioOpenId] = useState(null);
+
+  const errorCount = window.PROC_JOBS.filter(j => j.state === "err").length;
+  const unread = notifications.filter(n => !n.read).length;
+
+  function go(r, opts) {
+    setStandTag(opts && opts.tag ? opts.tag : null);
+    setStandTags(opts && opts.view ? opts.view.include.tags.items : (opts && opts.tag ? [opts.tag] : null));
+    setArticle(null);
+    setRoute(r);
+    setMobileOpen(false);
+    setNotiOpen(false);
+    window.scrollTo(0, 0);
+  }
+  function openSettings(sec) {
+    setSetSectionState(sec || "tags");
+    setSetFocusNew(sec === "views");
+    setRoute("settings");
+    setArticle(null);
+    setMobileOpen(false);
+    window.scrollTo(0, 0);
+  }
+  function openArticle(a) { setArticle(a); setRoute("article"); setMobileOpen(false); window.scrollTo(0, 0); }
+  function back() { setArticle(null); setRoute("stand"); }
+  function onGenerate(kind, scope, preset) { setGenReq({ kind, scope, presetPrompt: preset }); }
+  function onArtifactDone(art) {
+    setArtifacts(prev => [art, ...prev]);
+    setGenReq(null);
+    setArticle(null);
+    setRoute("studio");
+    setStudioOpenId(art.id);
+    window.scrollTo(0, 0);
+  }
+
+  const meta = route === "article" && article ? { title: article.title, icon: "doc" } : PAGE_META[route];
+
+  return (
+    <div className={`app ${collapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`} data-screen-label={meta.title}>
+      <div className="scrim" onClick={() => setMobileOpen(false)}></div>
+      <Sidebar route={route === "article" ? "stand" : route} go={go} collapsed={collapsed} errorCount={errorCount}
+        savedViews={savedViews} onAccount={openSettings} />
+      <div className="main">
+        <TopBar title={meta.title} icon={meta.icon}
+          onToggle={() => setCollapsed(c => !c)}
+          onMenu={() => setMobileOpen(true)}
+          onSearch={() => go("stand")}
+          onBell={() => setNotiOpen(o => !o)} unread={unread} />
+
+        {route === "ingest" && <Ingest go={go} />}
+        {route === "stand" && <Newsstand onOpen={openArticle} initialTags={standTags} key={(standTags||[]).join(",") || "all"} />}
+        {route === "notebook" && <Notebook openArticle={openArticle} onGenerate={onGenerate} />}
+        {route === "processing" && <Processing />}
+        {route === "article" && article && <ArticleView article={article} onBack={back} onGenerate={onGenerate} />}
+        {route === "studio" && <Studio artifacts={artifacts} setArtifacts={setArtifacts} onGenerate={onGenerate} openId={studioOpenId} clearOpen={() => setStudioOpenId(null)} />}
+        {route === "settings" && <Settings section={setSection} setSection={setSetSectionState} views={savedViews} setViews={setSavedViews} focusNew={setFocusNew} />}
+      </div>
+
+      {notiOpen && <NotificationCenter items={notifications} setItems={setNotifications} onClose={() => setNotiOpen(false)} go={go} />}
+      {genReq && <GenerateModal kind={genReq.kind} scopeLabel={genReq.scope} presetPrompt={genReq.presetPrompt} onClose={() => setGenReq(null)} onDone={onArtifactDone} />}
+      {route === "article" && article && <ArticleAssistant article={article} key={article.id} />}
+      <MobileTabBar route={route === "article" || route === "settings" ? route : route} go={go} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
