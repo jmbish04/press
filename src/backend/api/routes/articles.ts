@@ -332,7 +332,7 @@ articlesRouter.get("/:id/audio", async (c) => {
   // new audio both stream correctly.
   const audioType =
     obj.httpMetadata?.contentType ??
-    (row.audioKey.endsWith(".mp3") ? "audio/mpeg" : "audio/wav");
+    (row.audioKey?.endsWith(".mp3") ? "audio/mpeg" : "audio/wav");
 
   return new Response(obj.body, {
     headers: {
