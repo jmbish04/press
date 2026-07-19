@@ -15,7 +15,7 @@
  *   6. index    — D1 insert (article row + properties + cleanContent + sourceId + ragUuid)
  *   7. tags     — AI-driven tag assignment + new tag creation
  *   8. mindmap  — Workers AI mind map generation → R2 + D1 storage
- *   9. audio    — Deepgram Aura-2 TTS narration (chunked, full article, MP3) → R2 + D1 storage
+ *   9. audio    — optional Deepgram Aura-2 TTS narration (disabled by default) → R2 + D1 storage
  *  10. finalize — Mark job done
  *
  * @see https://developers.cloudflare.com/workflows/
@@ -44,6 +44,7 @@ import {
 import { detectBotBlock } from "../ai/ingest/detectBotBlock";
 import { extractArticle } from "../ai/ingest/extractArticle";
 import { narrateFullArticle } from "../ai/ingest/narrateFullArticle";
+import { AUTOMATIC_NARRATION_ENABLED } from "../ai/ingest/narrationPolicy";
 import { persistProperties, type PendingProperty } from "../ai/ingest/persistProperties";
 import { resolveSource } from "../ai/ingest/resolveSource";
 import { uploadImageToCF } from "../ai/ingest/uploadImage";
@@ -724,6 +725,10 @@ export class ArticleIngestionWorkflow extends WorkflowEntrypoint<Env, IngestionP
         },
         async () => {
           await updateJobProgress(this.env, jobId, { stage: 9 });
+
+          if (!AUTOMATIC_NARRATION_ENABLED) {
+            return { audioKey: null, skipped: "automatic narration disabled" };
+          }
 
           // Use Kimi-cleaned content for narration — no junk metadata.
           const textForNarration = extraction.articleContent || renderResult.textContent;
