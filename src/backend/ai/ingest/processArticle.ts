@@ -8,7 +8,7 @@
  * This module is now at feature-parity with `ArticleIngestionWorkflow`:
  *   render → screenshot → PDF → image scrape → extract (Kimi K2.6) →
  *   images (CF Images upload) → embed (chunked) → upsert → properties →
- *   source → tags → mindmap → audio (chunked TTS)
+ *   source → tags → mindmap → optional audio (disabled by default)
  *
  * The Workflow is the preferred canonical path for new ingestion. This module
  * remains for compatibility with the IngestAgent and bulk imports.
@@ -26,6 +26,7 @@ import { assignArticleTags } from "./assignTags";
 import { resolveSource } from "./resolveSource";
 import { extractArticle } from "./extractArticle";
 import { narrateFullArticle } from "./narrateFullArticle";
+import { AUTOMATIC_NARRATION_ENABLED } from "./narrationPolicy";
 import { uploadImageToCF, filterJunkImages, type ScrapedImage } from "./uploadImage";
 import { generateMindMapData } from "../agents/pwaSpawner/methods/generateMindMapData";
 import { chunkText } from "../rag/chunkText";
@@ -428,7 +429,7 @@ export async function processArticle(
     }
 
     // ── Audio narration (full article, chunked TTS) ──────────────────
-    try {
+    if (AUTOMATIC_NARRATION_ENABLED) try {
       // Send plain text to TTS — never HTML (Aura reads tags aloud).
       const textForNarration = transcriptionText || textContent;
       const voice = await getConfiguredVoice(env);
